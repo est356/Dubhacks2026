@@ -16,17 +16,19 @@ Finding a good place to study is a constant struggle for college students and re
 * **AI Recommendation Chatbot:** Esther
 * **Slide Deck & Pitching:** All
 
-## Quick start (mobile)
+## Quick start (mobile + Expo Go)
 
 ```bash
 cd mobile
 npm install
-npx expo start
+npm start                 # laptop + same Wi‑Fi
+# if the project never appears in Expo Go's list / QR fails:
+npm run start:tunnel      # works across networks; paste exp:// URL in Expo Go
 ```
 
-Open in **Expo Go** on a phone, or use iOS/Android simulators. See [`mobile/README.md`](mobile/README.md).
+**Important:** Expo Go’s “servers on your network” list often stays empty — that is normal. Use **Scan QR** in Expo Go or paste the terminal `exp://…` URL. Full phone steps: [`mobile/README.md`](mobile/README.md).
 
-> `web/` holds an earlier Next.js prototype and is **not** the product path.
+> Project targets **Expo SDK 54** so App Store / Play Store Expo Go works. `web/` is an archived Next.js prototype.
 
 ## The 3-Minute Demo Plan
 1. Open the app to the interactive map.
