@@ -4,7 +4,7 @@
 Finding a good place to study is a constant struggle for college students and remote workers. It's hard to know if a cafe has reliable Wi-Fi, enough outlets, or the right noise level before you get there. Studying can feel isolating, and coordinating with friends is disjointed.
 
 ## The Solution
-**Catfe** is a mobile-first web app that takes the guesswork out of studying. It combines cafe discovery, study-ability ratings (Wi-Fi, outlets, noise), a social layer to see where friends are checked in, and a cute AI Cat that recommends spots from a short description of your needs.
+**Catfe** is a **mobile app** (Expo / React Native) that takes the guesswork out of studying. It combines cafe discovery, study-ability ratings (Wi-Fi, outlets, noise), a social layer to see where friends are checked in, and a cute AI Cat that recommends spots from a short description of your needs.
 
 ## Track
 * **Main Track:** Community Kitchen (Social Good / Community Support) OR Chef's Choice (UI/UX)
@@ -16,15 +16,17 @@ Finding a good place to study is a constant struggle for college students and re
 * **AI Recommendation Chatbot:** Esther
 * **Slide Deck & Pitching:** All
 
-## Quick start
+## Quick start (mobile)
 
 ```bash
-cd web
+cd mobile
 npm install
-npm run dev
+npx expo start
 ```
 
-See [`web/README.md`](web/README.md) for env options.
+Open in **Expo Go** on a phone, or use iOS/Android simulators. See [`mobile/README.md`](mobile/README.md).
+
+> `web/` holds an earlier Next.js prototype and is **not** the product path.
 
 ## The 3-Minute Demo Plan
 1. Open the app to the interactive map.

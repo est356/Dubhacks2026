@@ -1,23 +1,5 @@
-# Catfe (web)
+# Catfe web prototype (archived)
 
-Next.js app for the DubHacks 2026 study-spot product.
+This Next.js app was an early MVP spike. **Catfe is now a mobile Expo app** — see [`../mobile/`](../mobile/).
 
-## Run locally
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-Optional: copy `.env.example` to `.env.local` and set `OPENAI_API_KEY` for live chatbot replies. Without it, recommendations use the built-in rule-based cat.
-
-## Demo features
-
-- Interactive UW-area map (Leaflet) with hover/popups and filters
-- AI Cat recommender (local or OpenAI via `/api/chat`)
-- Save favorites + star ratings (localStorage)
-- Friend activity feed with Spotify track stubs
-- Manual study session logging with optional photo
+Kept only for reference; do not treat this folder as the product entrypoint.
