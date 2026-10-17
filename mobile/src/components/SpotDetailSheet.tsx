@@ -34,7 +34,7 @@ export default function SpotDetailSheet({
       <Pressable style={styles.close} onPress={onClose}>
         <Text style={styles.closeText}>✕</Text>
       </Pressable>
-      <Image source={{ uri: spot.image }} style={styles.hero} />
+      <Image source={{ uri: spot.image }} style={styles.hero} resizeMode="cover" />
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.title}>{spot.name}</Text>
         <Text style={styles.meta}>{spot.address}</Text>
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   closeText: { color: colors.ink, fontWeight: "700" },
-  hero: { width: "100%", height: 120 },
+  hero: { width: "100%", height: 148 },
   body: { padding: spacing.md, gap: 6 },
   title: {
     fontSize: 22,

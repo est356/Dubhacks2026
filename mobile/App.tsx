@@ -12,6 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -89,8 +90,7 @@ export default function App() {
     );
   }
 
-  return (
-    <SafeAreaProvider>
+  const shell = (
       <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
         <StatusBar style="dark" />
         <View style={styles.brand}>
@@ -196,6 +196,17 @@ export default function App() {
           }}
         />
       </SafeAreaView>
+  );
+
+  return (
+    <SafeAreaProvider>
+      {Platform.OS === "web" ? (
+        <View style={styles.webStage}>
+          <View style={styles.phoneFrame}>{shell}</View>
+        </View>
+      ) : (
+        shell
+      )}
     </SafeAreaProvider>
   );
 }
@@ -206,6 +217,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.foam,
+  },
+  webStage: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#c9d6cb",
+    paddingVertical: 16,
+  },
+  phoneFrame: {
+    width: "100%",
+    maxWidth: 430,
+    height: "100%",
+    maxHeight: 900,
+    borderRadius: 28,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(26,47,35,0.18)",
+    backgroundColor: "#e8f1e9",
+    shadowColor: "#1a2f23",
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
   },
   safe: {
     flex: 1,
