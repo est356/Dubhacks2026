@@ -1199,7 +1199,8 @@ h1 {
   transform: rotate(.35deg);
 }
 
-.activity-card > img {
+.activity-card > img,
+.activity-card .activity-avatar {
   width: 54px;
   height: 64px;
   object-fit: cover;
@@ -1481,6 +1482,18 @@ h1 {
   gap: 7px;
 }
 
+.friend-row.is-scroll {
+  justify-content: flex-start;
+  margin-inline: -12px;
+  padding-inline: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.friend-row.is-scroll button {
+  flex: 0 0 68px;
+}
+
 .friend-row button {
   min-width: 0;
   flex: 1;
@@ -1508,12 +1521,22 @@ h1 {
   box-shadow: 0 4px 0 color-mix(in srgb, var(--friend-color) 40%, transparent);
 }
 
-.friend-photo img {
+.friend-photo img,
+.friend-photo .friend-initial {
   width: 100%;
   height: 100%;
   border-radius: 43% 51% 45% 48%;
   object-fit: cover;
   filter: saturate(.8);
+}
+
+.friend-photo .friend-initial {
+  display: grid;
+  place-items: center;
+  color: #fff9eb;
+  background: var(--friend-color);
+  font: 700 26px "Gaegu", cursive;
+  filter: none;
 }
 
 .friend-photo b {
@@ -2809,7 +2832,8 @@ h1 {
   box-shadow: 2px 2px 0 rgba(62,114,86,.28);
 }
 
-.add-sheet .place-search-input input {
+.add-sheet .place-search-input input,
+.quick-log .place-search-input input {
   height: 100%;
   padding: 0;
   border: 0;
@@ -2817,8 +2841,14 @@ h1 {
   box-shadow: none;
 }
 
+.quick-log .place-lookup {
+  grid-column: 1 / -1;
+}
+
 .place-suggestions {
   position: relative;
+  max-height: 220px;
+  overflow: auto;
   z-index: 3;
   overflow: hidden;
   margin-top: 5px;

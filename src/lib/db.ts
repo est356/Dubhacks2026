@@ -33,6 +33,16 @@ export type LeaderboardRow = {
   session_count: number;
 };
 
+export type StudySessionRow = {
+  id: string;
+  user_id: string;
+  display_name: string;
+  spot_name: string;
+  started_at: string;
+  duration_minutes: number;
+  note: string | null;
+};
+
 /** A spot as the app uses it, plus the Supabase uuid. */
 export type CommunitySpot = PlaceSpot & { dbId: string };
 
@@ -192,12 +202,13 @@ export async function addRankedCafe(input: {
   return data as DbSpot;
 }
 
-export async function logStudySession(hours: number, spotId?: string | null, note?: string) {
+export async function logStudySession(hours: number, spotId?: string | null, note?: string, placeName?: string) {
   const { data, error } = await client().rpc("log_study_session", {
     hours,
     spot_id: spotId ?? null,
     started_at: new Date().toISOString(),
     note: note?.trim() || null,
+    place_name: placeName?.trim() || null,
   });
   if (error) throw error;
   return data;
@@ -207,6 +218,12 @@ export async function getLeaderboard(limit = 10): Promise<LeaderboardRow[]> {
   const { data, error } = await client().rpc("get_study_leaderboard", { result_limit: limit });
   if (error) throw error;
   return (data ?? []) as LeaderboardRow[];
+}
+
+export async function getRecentSessions(limit = 20): Promise<StudySessionRow[]> {
+  const { data, error } = await client().rpc("get_recent_study_sessions", { result_limit: limit });
+  if (error) throw error;
+  return (data ?? []) as StudySessionRow[];
 }
 
 /** The app's review form uses words; the RPCs take 1–5 numbers. */

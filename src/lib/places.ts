@@ -150,3 +150,41 @@ export async function searchNearbySpots(center: LatLng, radius = 1500): Promise<
   });
   return places.map((place) => toSpot(place, center)).filter((spot): spot is PlaceSpot => spot !== null);
 }
+
+/**
+ * Text search for the stamp and study-log typeaheads.
+ * Biased toward the map center so nearby cafes, libraries, and stores come back first.
+ */
+export async function searchPlacesByText(text: string, center: LatLng = DEFAULT_CENTER_LATLNG): Promise<PlaceSpot[]> {
+  const query = text.trim();
+  if (!query || typeof google === "undefined" || !google.maps?.importLibrary) return [];
+  const { Place } = (await google.maps.importLibrary("places")) as google.maps.PlacesLibrary & {
+    Place: {
+      searchByText: (request: {
+        textQuery: string;
+        fields: string[];
+        locationBias: { center: LatLng; radius: number };
+        maxResultCount: number;
+      }) => Promise<{ places: google.maps.places.Place[] }>;
+    };
+  };
+  const { places } = await Place.searchByText({
+    textQuery: query,
+    fields: [
+      "id",
+      "displayName",
+      "location",
+      "formattedAddress",
+      "rating",
+      "userRatingCount",
+      "priceLevel",
+      "regularOpeningHours",
+      "photos",
+      "primaryType",
+      "types",
+    ],
+    locationBias: { center, radius: 20000 },
+    maxResultCount: 15,
+  });
+  return places.map((place) => toSpot(place, center)).filter((spot): spot is PlaceSpot => spot !== null);
+}
