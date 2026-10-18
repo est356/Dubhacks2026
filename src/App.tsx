@@ -1389,6 +1389,11 @@ export default function App() {
     rating: number;
     type: Spot["type"];
   }>(null);
+  const [sessionReceipt, setSessionReceipt] = useState<null | {
+    hours: string;
+    place: string;
+    subject: string;
+  }>(null);
   const [selectedFriend, setSelectedFriend] = useState<string | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [activities, setActivities] = useState(starterActivities);
@@ -1736,6 +1741,11 @@ export default function App() {
     setLogQuery("");
     setSelectedLogPlace(null);
     setLogPlaceError(false);
+    setSessionReceipt({
+      hours: String(loggedHours),
+      place: loggedPlace,
+      subject: loggedSubject || "Study session",
+    });
   }
 
   function finishSwipe(clientX: number) {
