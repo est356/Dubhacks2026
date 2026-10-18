@@ -1775,6 +1775,8 @@ export default function App() {
               </div>
               <article className="spot-receipt">
                 <div className="receipt-teeth" />
+                <p className="receipt-hello">thanks for rating!</p>
+                <img className="receipt-bunny" src="/bunny_coffee.svg" alt="" />
                 <p className="receipt-kicker">✦ VISIT RECEIPT ✦</p>
                 <div className="receipt-place">
                   <span><Icon name={receiptData.type} size={24} /></span>
