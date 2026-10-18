@@ -18,7 +18,7 @@ export type GuestAuth = {
 // One shared sign-in promise so React StrictMode's double effects don't create two guest users.
 let sessionPromise: Promise<{ user: User | null; reason: string }> | null = null;
 
-function ensureGuestSession() {
+export function ensureGuestSession() {
   if (!supabase) return Promise.resolve({ user: null, reason: "Supabase isn't configured — using sample data." });
   sessionPromise ??= (async () => {
     const { data } = await supabase.auth.getSession();

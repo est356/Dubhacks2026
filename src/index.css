@@ -59,7 +59,8 @@ button {
   overflow: hidden;
   background: #f3eddd;
   box-shadow: 0 0 55px rgba(54, 67, 58, .15);
-  padding-bottom: 88px;
+  /* [nav-flush] keep content clear of the bar, including the home-indicator area */
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
 }
 
 .phone-app::after {
@@ -1542,13 +1543,14 @@ h1 {
 
 .bottom-nav {
   width: min(100%, 470px);
-  height: 70px;
+  /* [nav-flush] bar grows by the safe-area inset so it fills down to the screen edge */
+  height: calc(70px + env(safe-area-inset-bottom, 0px));
   position: fixed;
   z-index: 12;
   bottom: 0;
   display: grid;
   grid-template-columns: 1fr 78px 1fr;
-  padding: 7px 18px 6px;
+  padding: 7px 18px calc(6px + env(safe-area-inset-bottom, 0px));
   background: #f9f5e9;
   border-top: 1.5px solid #66705e;
   box-shadow: 0 -4px 12px rgba(63,70,57,.08);
@@ -1586,7 +1588,7 @@ h1 {
   z-index: 14;
   left: 50%;
   margin-left: -29px;
-  bottom: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px)); /* [nav-flush] */
   transform: rotate(2deg);
   display: grid;
   place-items: center;
@@ -3489,24 +3491,23 @@ h1 {
 }
 
 @media (min-width: 600px) {
+  /* [nav-flush] frame keeps its top margin but runs to the bottom edge (no gap under the nav) */
   .phone-app {
-    min-height: calc(100vh - 36px);
-    margin: 18px 0;
-    border-radius: 28px;
+    min-height: calc(100vh - 18px);
+    margin: 18px 0 0;
+    border-radius: 28px 28px 0 0;
     border: 2px solid rgba(52,70,59,.55);
+    border-bottom: 0;
   }
 
   .map-view {
-    height: calc(100vh - 288px);
+    height: calc(100vh - 270px); /* [nav-flush] was -288px (one 18px margin removed) */
   }
 
-  .bottom-nav {
-    bottom: 18px;
-    border-radius: 0 0 26px 26px;
-  }
+  /* [nav-flush] nav sits flush at bottom: 0 (base rule); no bottom offset or bottom rounding */
 
   .add-button {
-    bottom: 42px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px)); /* [nav-flush] was 42px */
   }
 
   .hops-chat {
