@@ -422,15 +422,11 @@ function Icon({
 function Stamp({
   spot,
   active,
-  stamped,
   onClick,
-  onSave,
 }: {
   spot: Spot;
   active: boolean;
-  stamped: boolean;
   onClick: () => void;
-  onSave: () => void;
 }) {
   return (
     <div
@@ -456,18 +452,6 @@ function Stamp({
         <Icon name={spot.type} size={12} />
       </span>
       <span className="stamp-name">{spot.name}</span>
-      {!stamped && (
-        <button
-          className="marker-save-button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onSave();
-          }}
-          aria-label={`Save ${spot.name}`}
-        >
-          SAVE!
-        </button>
-      )}
     </div>
   );
 }
@@ -1545,7 +1529,10 @@ export default function App() {
             <StudyMap
               spots={visibleSpots}
               selectedId={selected}
-              onSelect={setSelected}
+              onSelect={(id) => {
+                setSelected(id);
+                setDetailsOpen(true);
+              }}
               onFallback={() => setFakeMap(true)}
               onPlacesLoaded={(results) => {
                 setPlacesSpots(results); // [supabase] merged with community spots in an effect above
@@ -1555,24 +1542,9 @@ export default function App() {
                 <Stamp
                   spot={spot}
                   active={selected === spot.id}
-                  stamped={stampedSpots.includes(spot.id)}
-                  onClick={() => setSelected(spot.id)}
-                  onSave={() => {
-                    const place = placeDirectory.find((item) => item.name === spot.name) ?? {
-                      name: spot.name,
-                      address: spot.address,
-                      area: spot.area,
-                      type: spot.type,
-                      position: spot.position,
-                      hours: spot.hours,
-                      openEarly: spot.openEarly,
-                      openLate: spot.openLate,
-                    };
+                  onClick={() => {
                     setSelected(spot.id);
-                    setSelectedPlace(place);
-                    setPlaceQuery(place.name);
-                    setSheetMode("stamp");
-                    setAddOpen(true);
+                    setDetailsOpen(true);
                   }}
                 />
               )}
@@ -1591,24 +1563,9 @@ export default function App() {
                   key={spot.id}
                   spot={spot}
                   active={selected === spot.id}
-                  stamped={stampedSpots.includes(spot.id)}
-                  onClick={() => setSelected(spot.id)}
-                  onSave={() => {
-                    const place = placeDirectory.find((item) => item.name === spot.name) ?? {
-                      name: spot.name,
-                      address: spot.address,
-                      area: spot.area,
-                      type: spot.type,
-                      position: spot.position,
-                      hours: spot.hours,
-                      openEarly: spot.openEarly,
-                      openLate: spot.openLate,
-                    };
+                  onClick={() => {
                     setSelected(spot.id);
-                    setSelectedPlace(place);
-                    setPlaceQuery(place.name);
-                    setSheetMode("stamp");
-                    setAddOpen(true);
+                    setDetailsOpen(true);
                   }}
                 />
               ))}
@@ -1639,7 +1596,11 @@ export default function App() {
               }}
               onPointerUp={(event) => {
                 event.stopPropagation();
-                if (cardDrag.current !== null && cardDrag.current - event.clientY > 35) setDetailsOpen(true);
+                if (cardDrag.current === null) return;
+                const lift = cardDrag.current - event.clientY;
+                const onButton = (event.target as HTMLElement).closest("button");
+                // Tap the card or pull it up to open the enlarged store sheet.
+                if (!onButton && (lift > 35 || Math.abs(lift) < 8)) setDetailsOpen(true);
                 cardDrag.current = null;
               }}
             >
