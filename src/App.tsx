@@ -2162,6 +2162,34 @@ export default function App() {
           </div>
         )}
 
+        {sessionReceipt && (
+          <div className="stamp-celebration" onMouseDown={() => setSessionReceipt(null)}>
+            <div className="receipt-stage" onMouseDown={(event) => event.stopPropagation()}>
+              <div className="stamp-strike" aria-hidden="true">
+                <span>STUDY LOG</span>
+                <strong>SAVED!</strong>
+              </div>
+              <article className="spot-receipt session-receipt">
+                <div className="receipt-teeth" />
+                <img className="receipt-bunny" src="/bunny_hug.svg" alt="" />
+                <p className="receipt-hello">nice work!</p>
+                <p className="receipt-kicker">✦ STUDY RECEIPT ✦</p>
+                <div className="receipt-rule" />
+                <dl>
+                  <div><dt>Hours</dt><dd>{sessionReceipt.hours}h</dd></div>
+                  <div><dt>Spot</dt><dd>{sessionReceipt.place}</dd></div>
+                  <div><dt>Studying</dt><dd>{sessionReceipt.subject}</dd></div>
+                  <div><dt>Logged</dt><dd>{new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}</dd></div>
+                </dl>
+                <div className="receipt-dots">• • • • • • • • • •</div>
+                <p className="receipt-thanks">Another hop forward.</p>
+                <div className="receipt-code">|||| ||| || |||| | |||</div>
+              </article>
+              <button className="receipt-done" onClick={() => setSessionReceipt(null)}>Tuck it away</button>
+            </div>
+          </div>
+        )}
+
         {detailsOpen && (
           <PlaceDetailSheet
             spot={selectedSpot}

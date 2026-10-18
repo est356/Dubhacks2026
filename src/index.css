@@ -2076,6 +2076,22 @@ h1 {
   margin: -4px auto 2px;
 }
 
+.session-receipt .receipt-bunny {
+  width: 168px;
+  margin: -10px auto -6px;
+}
+
+.spot-receipt.session-receipt dl > div:nth-child(3) dd {
+  color: #44473f;
+  letter-spacing: 0;
+  max-width: 62%;
+}
+
+.session-receipt dl > div:first-child dd {
+  color: #d08a2d;
+  letter-spacing: .04em;
+}
+
 .receipt-kicker {
   margin: 0 0 18px;
   color: #41483f;
