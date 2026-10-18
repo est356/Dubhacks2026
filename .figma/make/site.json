@@ -1,0 +1,10 @@
+{
+  "description": "Discover and track your favorite cafes and study spots with a whimsical, hand-drawn interface, making list-making and location sharing enjoyable.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
