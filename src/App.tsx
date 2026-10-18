@@ -4,10 +4,10 @@ import StudyMap, { hasGoogleMapsKey } from "./components/StudyMap";
 // [supabase] guest auth + community data live in their own files (not Figma-generated)
 import { useGuestAuth } from "./lib/auth";
 import {
-  addRankedCafe, addRating, fetchSpots, logStudySession, mergeSpots, reviewToNumbers,
-  type CommunitySpot,
+  addRankedCafe, addRating, fetchSpots, getLeaderboard, getRecentSessions, logStudySession, mergeSpots, reviewToNumbers,
+  type CommunitySpot, type LeaderboardRow, type StudySessionRow,
 } from "./lib/db";
-import type { PlaceSpot } from "./lib/places";
+import { searchPlacesByText, type LatLng, type PlaceSpot } from "./lib/places";
 import DisplayNamePrompt from "./components/DisplayNamePrompt";
 // [hops-gemini] Hops chat talks to Gemini via the Supabase Edge Function "hops-chat"
 import { askHops } from "./lib/hopsChat";
@@ -130,7 +130,72 @@ type PlaceResult = {
   hours: string;
   openEarly: boolean;
   openLate: boolean;
+  placeId?: string;
+  dbId?: string;
+  location?: LatLng;
 };
+
+function asPlaceResult(spot: PlaceSpot): PlaceResult {
+  return {
+    name: spot.name,
+    address: spot.address,
+    area: spot.area,
+    type: spot.type,
+    position: spot.position,
+    hours: spot.hours,
+    openEarly: spot.openEarly,
+    openLate: spot.openLate,
+    placeId: spot.placeId,
+    dbId: spot.dbId,
+    location: spot.location,
+  };
+}
+
+function usePlaceSuggestions(query: string, selectedName: string | undefined, known: PlaceSpot[]) {
+  const [remote, setRemote] = useState<PlaceSpot[]>([]);
+
+  useEffect(() => {
+    const text = query.trim();
+    if (text.length < 1 || selectedName === query) {
+      setRemote([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      searchPlacesByText(text)
+        .then((results) => {
+          if (!cancelled) setRemote(results);
+        })
+        .catch((error) => {
+          console.warn("[places] text search failed:", error);
+          if (!cancelled) setRemote([]);
+        });
+    }, 280);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query, selectedName]);
+
+  return useMemo(() => {
+    const text = query.trim().toLowerCase();
+    if (text.length < 1 || selectedName === query) return [];
+    const local = known.filter(
+      (spot) =>
+        Boolean(spot.placeId || spot.location || spot.dbId) &&
+        `${spot.name} ${spot.address} ${spot.area}`.toLowerCase().includes(text),
+    );
+    const seen = new Set<string>();
+    const merged: PlaceResult[] = [];
+    for (const spot of [...local, ...remote]) {
+      const key = (spot.placeId || spot.name).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(asPlaceResult(spot));
+    }
+    return merged;
+  }, [query, selectedName, known, remote]);
+}
 
 const placeDirectory: PlaceResult[] = [
   ...spots.map(({ name, address, area, type, position, hours, openEarly, openLate }) => ({
@@ -313,6 +378,28 @@ const friends = [
     color: "#c3863c",
   },
 ];
+
+const CIRCLE_COLORS = ["#e35345", "#577b50", "#4d6892", "#c3863c", "#b94d74"];
+
+function formatStudyHours(total: number) {
+  const value = Number(total);
+  if (!Number.isFinite(value)) return "0h";
+  const rounded = Math.round(value * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}h`;
+}
+
+function formatSessionWhen(iso: string) {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const minutes = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours === 1 ? "1 hr ago" : `${hours} hrs ago`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return "Yesterday";
+  return `${days} days ago`;
+}
 
 const starterActivities: Activity[] = [
   { id: 1, friendId: 2, hours: "2.5", place: "Moss & Mugs", subject: "Biology notes", when: "18 min ago" },
@@ -510,35 +597,151 @@ function SpotCard({
   );
 }
 
+function PlaceTypeahead({
+  label,
+  query,
+  onQueryChange,
+  suggestions,
+  onSelect,
+  selected,
+  error,
+  required,
+}: {
+  label: string;
+  query: string;
+  onQueryChange: (value: string) => void;
+  suggestions: PlaceResult[];
+  onSelect: (place: PlaceResult) => void;
+  selected: PlaceResult | null;
+  error?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className={`place-lookup ${error ? "has-error" : ""}`}>
+      <label>
+        {label} {required ? <span>required</span> : null}
+        <div className="place-search-input">
+          <Icon name="search" size={18} />
+          <input
+            autoComplete="off"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Start typing a place name..."
+          />
+        </div>
+      </label>
+      {suggestions.length > 0 && (
+        <div className="place-suggestions">
+          {suggestions.map((place) => (
+            <button
+              type="button"
+              key={`${place.placeId ?? place.name}-${place.address}`}
+              onClick={() => onSelect(place)}
+            >
+              <span className="suggestion-icon"><Icon name={place.type} size={19} /></span>
+              <span><b>{place.name}</b><small>{place.address} · {place.area}</small></span>
+              <strong>›</strong>
+            </button>
+          ))}
+        </div>
+      )}
+      {selected && (
+        <div className="selected-place">
+          <span><Icon name={selected.type} size={24} /></span>
+          <div>
+            <b>{selected.name}</b>
+            <p>{selected.address}</p>
+            <small>{selected.area} · {selected.hours}</small>
+          </div>
+          <em>✓</em>
+        </div>
+      )}
+      {error ? <p className="place-error">{error}</p> : null}
+    </div>
+  );
+}
+
 function FriendActivity({
   activities,
+  sessions,
   leaderboardHours,
+  leaderboardRows,
+  youId,
+  liveStats,
   selectedFriend,
   setSelectedFriend,
   logOpen,
   setLogOpen,
   onLog,
   onBack,
-  spotOptions,
+  logQuery,
+  onLogQueryChange,
+  logSuggestions,
+  selectedLogPlace,
+  onSelectLogPlace,
+  logPlaceError,
 }: {
-  spotOptions?: string[]; // [supabase] real spot names for the log form
   activities: Activity[];
+  sessions: StudySessionRow[];
   leaderboardHours: Record<number, number>;
-  selectedFriend: number | null;
-  setSelectedFriend: (id: number | null) => void;
+  leaderboardRows: LeaderboardRow[];
+  youId?: string;
+  liveStats: boolean;
+  selectedFriend: string | null;
+  setSelectedFriend: (id: string | null) => void;
   logOpen: boolean;
   setLogOpen: (open: boolean) => void;
   onLog: (event: React.FormEvent<HTMLFormElement>) => void;
   onBack: () => void;
+  logQuery: string;
+  onLogQueryChange: (value: string) => void;
+  logSuggestions: PlaceResult[];
+  selectedLogPlace: PlaceResult | null;
+  onSelectLogPlace: (place: PlaceResult) => void;
+  logPlaceError: boolean;
 }) {
-  const filteredActivities = selectedFriend
-    ? activities.filter((activity) => activity.friendId === selectedFriend)
+  const localFriendId = friends.some((friend) => String(friend.id) === selectedFriend)
+    ? Number(selectedFriend)
+    : null;
+  const filteredActivities = localFriendId
+    ? activities.filter((activity) => activity.friendId === localFriendId)
     : activities;
-  const activeFriend = friends.find((friend) => friend.id === selectedFriend);
-  const leaderboard = [...friends]
-    .map((friend) => ({ ...friend, total: leaderboardHours[friend.id] ?? 0 }))
-    .sort((a, b) => b.total - a.total);
-  const leadingHours = Math.max(...leaderboard.map((friend) => friend.total), 1);
+  const visibleSessions = selectedFriend
+    ? sessions.filter((session) => session.user_id === selectedFriend)
+    : sessions;
+  const activeFriend = friends.find((friend) => friend.id === localFriendId);
+  const circle = liveStats
+    ? leaderboardRows.map((row, index) => {
+        const total = Number(row.total_hours);
+        const isYou = row.user_id === youId;
+        return {
+          key: row.user_id,
+          name: isYou ? "You" : row.display_name || "Student",
+          hoursLabel: formatStudyHours(total),
+          total,
+          sessions: Number(row.session_count) || 0,
+          image: undefined as string | undefined,
+          color: CIRCLE_COLORS[index % CIRCLE_COLORS.length],
+          isYou,
+        };
+      })
+    : [...friends]
+        .map((friend) => {
+          const total = leaderboardHours[friend.id] ?? 0;
+          return {
+            key: String(friend.id),
+            name: friend.name,
+            hoursLabel: formatStudyHours(total),
+            total,
+            sessions: friend.sessions,
+            image: friend.image,
+            color: friend.color,
+            isYou: friend.id === 1,
+          };
+        })
+        .sort((a, b) => b.total - a.total);
+  const leadingHours = Math.max(...circle.map((person) => person.total), 1);
+  const selectedName = circle.find((person) => person.key === selectedFriend)?.name;
 
   return (
     <section className="friend-page">
@@ -565,12 +768,16 @@ function FriendActivity({
             <span>Hours</span>
             <input name="hours" type="number" min=".25" step=".25" defaultValue="1" required />
           </label>
-          <label>
-            <span>Spot</span>
-            <select name="place" defaultValue="Moss & Mugs">
-              {(spotOptions ?? spots.map((spot) => spot.name)).map((name) => <option key={name}>{name}</option>)}
-            </select>
-          </label>
+          <PlaceTypeahead
+            label="Spot"
+            query={logQuery}
+            onQueryChange={onLogQueryChange}
+            suggestions={logSuggestions}
+            selected={selectedLogPlace}
+            onSelect={onSelectLogPlace}
+            error={logPlaceError ? "Choose a place from the search results first." : undefined}
+            required
+          />
           <label className="log-subject">
             <span>What were you studying?</span>
             <input name="subject" placeholder="e.g. Chapter five" required />
@@ -586,25 +793,33 @@ function FriendActivity({
               <p className="kicker">YOUR STUDY CIRCLE</p>
               <h2>How everyone's doing</h2>
             </div>
-            <span className="week-label">this week</span>
+            <span className="week-label">{liveStats ? "all time" : "this week"}</span>
           </div>
-          <div className="friend-row">
-            {friends.map((friend) => (
-              <button
-                key={friend.id}
-                className={selectedFriend === friend.id ? "active" : ""}
-                onClick={() => setSelectedFriend(selectedFriend === friend.id ? null : friend.id)}
-                style={{ "--friend-color": friend.color } as React.CSSProperties}
-              >
-                <span className="friend-photo">
-                  <img src={friend.image} alt={friend.name} />
-                  <b>{friend.hours}</b>
-                </span>
-                <strong>{friend.name}</strong>
-                <small>{friend.sessions} sessions</small>
-              </button>
-            ))}
-          </div>
+          {circle.length ? (
+            <div className={`friend-row${circle.length > 4 ? " is-scroll" : ""}`}>
+              {circle.map((person) => (
+                <button
+                  key={person.key}
+                  className={selectedFriend === person.key ? "active" : ""}
+                  onClick={() => setSelectedFriend(selectedFriend === person.key ? null : person.key)}
+                  style={{ "--friend-color": person.color } as React.CSSProperties}
+                >
+                  <span className="friend-photo">
+                    {person.image ? (
+                      <img src={person.image} alt={person.name} />
+                    ) : (
+                      <span className="friend-initial">{person.name.slice(0, 1).toUpperCase()}</span>
+                    )}
+                    <b>{person.hoursLabel}</b>
+                  </span>
+                  <strong>{person.name}</strong>
+                  <small>{person.sessions} sessions</small>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="leaderboard-note">No sessions logged yet. Be the first to hop on!</p>
+          )}
         </section>
 
         <section className="nearby-section">
@@ -633,12 +848,38 @@ function FriendActivity({
           <div className="section-title">
             <div>
               <p className="kicker">THE LATEST</p>
-              <h2>{activeFriend ? `${activeFriend.name}'s week` : "Friends are studying"}</h2>
+              <h2>
+                {liveStats
+                  ? (selectedName ? `${selectedName}'s sessions` : "Friends are studying")
+                  : (activeFriend ? `${activeFriend.name}'s week` : "Friends are studying")}
+              </h2>
             </div>
             {selectedFriend && <button onClick={() => setSelectedFriend(null)}>See all</button>}
           </div>
-          <div className={`activity-feed${filteredActivities.length > 3 ? " activity-feed--scroll" : ""}`}>
-            {filteredActivities.length ? filteredActivities.map((activity, index) => {
+          <div className={`activity-feed${(liveStats ? visibleSessions.length : filteredActivities.length) > 3 ? " activity-feed--scroll" : ""}`}>
+            {liveStats ? (
+              visibleSessions.length ? (
+                visibleSessions.map((session, index) => {
+                  const person = circle.find((item) => item.key === session.user_id);
+                  const name = person?.name || session.display_name || "Student";
+                  const hoursLabel = formatStudyHours(Number(session.duration_minutes) / 60);
+                  const hoursAmount = hoursLabel.replace(/h$/, "");
+                  return (
+                    <article className="activity-card" key={session.id}>
+                      <span className="community-avatar activity-avatar" style={{ background: person?.color ?? CIRCLE_COLORS[index % CIRCLE_COLORS.length] }} aria-hidden="true">
+                        {name.slice(0, 1).toUpperCase()}
+                      </span>
+                      <div className="activity-copy">
+                        <div><strong>{name}</strong><span>{formatSessionWhen(session.started_at)}</span></div>
+                        <p>studied <b>{hoursAmount} {hoursAmount === "1" ? "hour" : "hours"}</b> at <em>{session.spot_name}</em></p>
+                        {session.note ? <small>Working on: {session.note}</small> : null}
+                      </div>
+                      <div className={`activity-stamp stamp-${index % 3}`}>{hoursLabel}</div>
+                    </article>
+                  );
+                })
+              ) : <p className="quiet-feed">No sessions logged yet.</p>
+            ) : filteredActivities.length ? filteredActivities.map((activity, index) => {
               const friend = friends.find((item) => item.id === activity.friendId) ?? friends[0];
               return (
                 <article className="activity-card" key={activity.id}>
@@ -661,25 +902,35 @@ function FriendActivity({
               <p className="kicker">FRIENDLY COMPETITION</p>
               <h2>Friends leaderboard</h2>
             </div>
-            <span className="week-label">this week</span>
+            <span className="week-label">{liveStats ? "all time" : "this week"}</span>
           </div>
-          <div className="leaderboard-list">
-            {leaderboard.map((friend, index) => (
-              <button
-                key={friend.id}
-                className={`leaderboard-row ${friend.id === 1 ? "is-you" : ""}`}
-                onClick={() => setSelectedFriend(friend.id)}
-                aria-label={`View ${friend.name}'s activity`}
-              >
-                <span className="leaderboard-rank">{index + 1}</span>
-                <img src={friend.image} alt="" />
-                <span className="leaderboard-progress">
-                  <span><b>{friend.name}</b><strong>{friend.total.toFixed(friend.total % 1 ? 1 : 0)}h</strong></span>
-                  <i><em style={{ width: `${Math.max(9, (friend.total / leadingHours) * 100)}%` }} /></i>
-                </span>
-              </button>
-            ))}
-          </div>
+          {circle.length ? (
+            <div className="leaderboard-list">
+              {circle.map((person, index) => (
+                <button
+                  key={person.key}
+                  className={`leaderboard-row ${person.isYou ? "is-you" : ""}`}
+                  onClick={() => setSelectedFriend(person.key)}
+                  aria-label={`View ${person.name}'s activity`}
+                >
+                  <span className="leaderboard-rank">{index + 1}</span>
+                  {person.image ? (
+                    <img src={person.image} alt="" />
+                  ) : (
+                    <span className="community-avatar" style={{ background: person.color }} aria-hidden="true">
+                      {person.name.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="leaderboard-progress">
+                    <span><b>{person.name}</b><strong>{person.hoursLabel}</strong></span>
+                    <i><em style={{ width: `${Math.max(9, (person.total / leadingHours) * 100)}%` }} /></i>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="leaderboard-note">No sessions logged yet. Be the first to hop on!</p>
+          )}
           <p className="leaderboard-note">Log a session and watch your bar hop forward.</p>
         </section>
 
@@ -1124,7 +1375,12 @@ export default function App() {
     rating: number;
     type: Spot["type"];
   }>(null);
-  const [selectedFriend, setSelectedFriend] = useState<number | null>(null);
+  const [sessionReceipt, setSessionReceipt] = useState<null | {
+    hours: string;
+    place: string;
+    subject: string;
+  }>(null);
+  const [selectedFriend, setSelectedFriend] = useState<string | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [activities, setActivities] = useState(starterActivities);
   const [leaderboardHours, setLeaderboardHours] = useState<Record<number, number>>({
@@ -1149,6 +1405,9 @@ export default function App() {
   const [placeQuery, setPlaceQuery] = useState("");
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [placeError, setPlaceError] = useState(false);
+  const [logQuery, setLogQuery] = useState("");
+  const [selectedLogPlace, setSelectedLogPlace] = useState<PlaceResult | null>(null);
+  const [logPlaceError, setLogPlaceError] = useState(false);
   const [mapView, setMapView] = useState({ x: 0, y: 0, scale: 1 });
   // [google-maps] true when we show the original hand-drawn map (no key / Maps failed to load)
   const [fakeMap, setFakeMap] = useState(!hasGoogleMapsKey);
@@ -1158,6 +1417,8 @@ export default function App() {
   const auth = useGuestAuth();
   const [placesSpots, setPlacesSpots] = useState<PlaceSpot[]>([]);
   const [communitySpots, setCommunitySpots] = useState<CommunitySpot[]>([]);
+  const [leaderboardRows, setLeaderboardRows] = useState<LeaderboardRow[]>([]);
+  const [sessions, setSessions] = useState<StudySessionRow[]>([]);
   const [syncNotice, setSyncNotice] = useState("");
   const [pendingNameAction, setPendingNameAction] = useState<null | (() => void)>(null);
   const refreshCommunity = useCallback(() => {
@@ -1167,6 +1428,8 @@ export default function App() {
         console.warn("[supabase] fetchSpots failed:", error);
         setSyncNotice("Couldn't load community spots — showing local data.");
       });
+    getLeaderboard(10).then(setLeaderboardRows).catch((error) => console.warn("[supabase] leaderboard failed:", error));
+    getRecentSessions(20).then(setSessions).catch((error) => console.warn("[supabase] sessions failed:", error));
   }, []);
   useEffect(() => {
     if (auth.status === "ready") refreshCommunity();
@@ -1231,13 +1494,9 @@ export default function App() {
   // [supabase] end
   const touchStart = useRef<number | null>(null);
 
-  const placeSuggestions = useMemo(() => {
-    const search = placeQuery.trim().toLowerCase();
-    if (search.length < 2 || selectedPlace?.name === placeQuery) return [];
-    return placeDirectory
-      .filter((place) => `${place.name} ${place.address} ${place.area}`.toLowerCase().includes(search))
-      .slice(0, 5);
-  }, [placeQuery, selectedPlace]);
+  const knownPlaces = allSpots as PlaceSpot[];
+  const placeSuggestions = usePlaceSuggestions(placeQuery, selectedPlace?.name, knownPlaces);
+  const logSuggestions = usePlaceSuggestions(logQuery, selectedLogPlace?.name, knownPlaces);
 
   const visibleSpots = useMemo(
     () =>
@@ -1381,29 +1640,98 @@ export default function App() {
 
   function logActivity(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!selectedLogPlace) {
+      setLogPlaceError(true);
+      return;
+    }
     const form = new FormData(event.currentTarget);
-    // [supabase] also log to the community leaderboard
-    const loggedSpot = allSpots.find((spot) => spot.name === String(form.get("place") || "")) as Partial<PlaceSpot> | undefined;
-    syncToSupabase(() =>
-      logStudySession(Number(form.get("hours") || 1), loggedSpot?.dbId, String(form.get("subject") || "")),
+    const loggedSpot = (allSpots as PlaceSpot[]).find(
+      (spot) =>
+        (selectedLogPlace.placeId && spot.placeId === selectedLogPlace.placeId) ||
+        spot.name === selectedLogPlace.name,
     );
-    setActivities((current) => [
-      {
-        id: Date.now(),
-        friendId: 1,
-        hours: String(form.get("hours") || "1"),
-        place: String(form.get("place") || "Moss & Mugs"),
-        subject: String(form.get("subject") || "Study session"),
-        when: "Just now",
-      },
-      ...current,
-    ]);
+    syncToSupabase(() =>
+      logStudySession(
+        Number(form.get("hours") || 1),
+        selectedLogPlace.dbId || loggedSpot?.dbId,
+        String(form.get("subject") || ""),
+        selectedLogPlace.name,
+      ),
+    );
+    const loggedHours = Number(form.get("hours") || 1);
+    const loggedPlace = selectedLogPlace.name;
+    const loggedSubject = String(form.get("subject") || "");
+    if (auth.status === "ready" && auth.user?.id) {
+      setSessions((current) => [
+        {
+          id: crypto.randomUUID(),
+          user_id: auth.user!.id,
+          display_name: auth.displayName || "You",
+          spot_name: loggedPlace,
+          started_at: new Date().toISOString(),
+          duration_minutes: Math.max(1, Math.round(loggedHours * 60)),
+          note: loggedSubject || null,
+        },
+        ...current,
+      ]);
+    } else {
+      setActivities((current) => [
+        {
+          id: Date.now(),
+          friendId: 1,
+          hours: String(loggedHours),
+          place: loggedPlace,
+          subject: loggedSubject || "Study session",
+          when: "Just now",
+        },
+        ...current,
+      ]);
+    }
     setLeaderboardHours((current) => ({
       ...current,
-      1: (current[1] ?? 0) + Number(form.get("hours") || 1),
+      1: (current[1] ?? 0) + loggedHours,
     }));
+    if (auth.user?.id) {
+      const you = auth.user.id;
+      setLeaderboardRows((current) => {
+        const existing = current.find((row) => row.user_id === you);
+        const next = existing
+          ? current.map((row) =>
+              row.user_id === you
+                ? {
+                    ...row,
+                    total_hours: Number(row.total_hours) + loggedHours,
+                    total_minutes: Number(row.total_minutes) + loggedHours * 60,
+                    session_count: Number(row.session_count) + 1,
+                  }
+                : row,
+            )
+          : [
+              ...current,
+              {
+                rank: current.length + 1,
+                user_id: you,
+                display_name: auth.displayName || "You",
+                total_minutes: loggedHours * 60,
+                total_hours: loggedHours,
+                session_count: 1,
+              },
+            ];
+        return next
+          .sort((a, b) => Number(b.total_hours) - Number(a.total_hours))
+          .map((row, index) => ({ ...row, rank: index + 1 }));
+      });
+    }
     setSelectedFriend(null);
     setLogOpen(false);
+    setLogQuery("");
+    setSelectedLogPlace(null);
+    setLogPlaceError(false);
+    setSessionReceipt({
+      hours: String(loggedHours),
+      place: loggedPlace,
+      subject: loggedSubject || "Study session",
+    });
   }
 
   function finishSwipe(clientX: number) {
@@ -1679,14 +2007,31 @@ export default function App() {
         ) : (
           <FriendActivity
             activities={activities}
+            sessions={sessions}
             leaderboardHours={leaderboardHours}
+            leaderboardRows={leaderboardRows}
+            youId={auth.user?.id}
+            liveStats={auth.status === "ready"}
             selectedFriend={selectedFriend}
             setSelectedFriend={setSelectedFriend}
             logOpen={logOpen}
             setLogOpen={setLogOpen}
             onLog={logActivity}
             onBack={() => setPage("places")}
-            spotOptions={allSpots.map((spot) => spot.name)} // [supabase]
+            logQuery={logQuery}
+            onLogQueryChange={(value) => {
+              setLogQuery(value);
+              setSelectedLogPlace(null);
+              setLogPlaceError(false);
+            }}
+            logSuggestions={logSuggestions}
+            selectedLogPlace={selectedLogPlace}
+            onSelectLogPlace={(place) => {
+              setSelectedLogPlace(place);
+              setLogQuery(place.name);
+              setLogPlaceError(false);
+            }}
+            logPlaceError={logPlaceError}
           />
         )}
 
@@ -1777,6 +2122,34 @@ export default function App() {
           </div>
         )}
 
+        {sessionReceipt && (
+          <div className="stamp-celebration" onMouseDown={() => setSessionReceipt(null)}>
+            <div className="receipt-stage" onMouseDown={(event) => event.stopPropagation()}>
+              <div className="stamp-strike" aria-hidden="true">
+                <span>STUDY LOG</span>
+                <strong>SAVED!</strong>
+              </div>
+              <article className="spot-receipt session-receipt">
+                <div className="receipt-teeth" />
+                <img className="receipt-bunny" src="/bunny_hug.svg" alt="" />
+                <p className="receipt-hello">nice work!</p>
+                <p className="receipt-kicker">✦ STUDY RECEIPT ✦</p>
+                <div className="receipt-rule" />
+                <dl>
+                  <div><dt>Hours</dt><dd>{sessionReceipt.hours}h</dd></div>
+                  <div><dt>Spot</dt><dd>{sessionReceipt.place}</dd></div>
+                  <div><dt>Studying</dt><dd>{sessionReceipt.subject}</dd></div>
+                  <div><dt>Logged</dt><dd>{new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}</dd></div>
+                </dl>
+                <div className="receipt-dots">• • • • • • • • • •</div>
+                <p className="receipt-thanks">Another hop forward.</p>
+                <div className="receipt-code">|||| ||| || |||| | |||</div>
+              </article>
+              <button className="receipt-done" onClick={() => setSessionReceipt(null)}>Tuck it away</button>
+            </div>
+          </div>
+        )}
+
         {detailsOpen && (
           <PlaceDetailSheet
             spot={selectedSpot}
@@ -1828,55 +2201,24 @@ export default function App() {
               </p>
               <form onSubmit={saveNewSpot}>
                 {sheetMode === "stamp" ? (
-                <div className={`place-lookup ${placeError ? "has-error" : ""}`}>
-                  <label>
-                    Find a store or study spot <span>required</span>
-                    <div className="place-search-input">
-                      <Icon name="search" size={18} />
-                      <input
-                        autoComplete="off"
-                        value={placeQuery}
-                        onChange={(event) => {
-                          setPlaceQuery(event.target.value);
-                          setSelectedPlace(null);
-                          setPlaceError(false);
-                        }}
-                        placeholder="Start typing a place name..."
-                      />
-                    </div>
-                  </label>
-                  {placeSuggestions.length > 0 && (
-                    <div className="place-suggestions">
-                      {placeSuggestions.map((place) => (
-                        <button
-                          type="button"
-                          key={`${place.name}-${place.address}`}
-                          onClick={() => {
-                            setSelectedPlace(place);
-                            setPlaceQuery(place.name);
-                            setPlaceError(false);
-                          }}
-                        >
-                          <span className="suggestion-icon"><Icon name={place.type} size={19} /></span>
-                          <span><b>{place.name}</b><small>{place.address} · {place.area}</small></span>
-                          <strong>›</strong>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {selectedPlace && (
-                    <div className="selected-place">
-                      <span><Icon name={selectedPlace.type} size={24} /></span>
-                      <div>
-                        <b>{selectedPlace.name}</b>
-                        <p>{selectedPlace.address}</p>
-                        <small>{selectedPlace.area} · {selectedPlace.hours}</small>
-                      </div>
-                      <em>✓</em>
-                    </div>
-                  )}
-                  {placeError && <p className="place-error">Choose a place from the search results first.</p>}
-                </div>
+                <PlaceTypeahead
+                  label="Find a store or study spot"
+                  query={placeQuery}
+                  onQueryChange={(value) => {
+                    setPlaceQuery(value);
+                    setSelectedPlace(null);
+                    setPlaceError(false);
+                  }}
+                  suggestions={placeSuggestions}
+                  selected={selectedPlace}
+                  onSelect={(place) => {
+                    setSelectedPlace(place);
+                    setPlaceQuery(place.name);
+                    setPlaceError(false);
+                  }}
+                  error={placeError ? "Choose a place from the search results first." : undefined}
+                  required
+                />
                 ) : selectedPlace ? (
                   <div className="rating-place-summary">
                     <span><Icon name={selectedPlace.type} size={23} /></span>
