@@ -1142,6 +1142,11 @@ export default function App() {
     rating: number;
     type: Spot["type"];
   }>(null);
+  const [sessionReceipt, setSessionReceipt] = useState<null | {
+    hours: string;
+    place: string;
+    subject: string;
+  }>(null);
   const [selectedFriend, setSelectedFriend] = useState<number | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [activities, setActivities] = useState(starterActivities);
@@ -1407,23 +1412,27 @@ export default function App() {
     syncToSupabase(() =>
       logStudySession(Number(form.get("hours") || 1), loggedSpot?.dbId, String(form.get("subject") || "")),
     );
+    const hours = String(form.get("hours") || "1");
+    const place = String(form.get("place") || "Moss & Mugs");
+    const subject = String(form.get("subject") || "Study session");
     setActivities((current) => [
       {
         id: Date.now(),
         friendId: 1,
-        hours: String(form.get("hours") || "1"),
-        place: String(form.get("place") || "Moss & Mugs"),
-        subject: String(form.get("subject") || "Study session"),
+        hours,
+        place,
+        subject,
         when: "Just now",
       },
       ...current,
     ]);
     setLeaderboardHours((current) => ({
       ...current,
-      1: (current[1] ?? 0) + Number(form.get("hours") || 1),
+      1: (current[1] ?? 0) + Number(hours || 1),
     }));
     setSelectedFriend(null);
     setLogOpen(false);
+    setSessionReceipt({ hours, place, subject });
   }
 
   function finishSwipe(clientX: number) {
@@ -1830,6 +1839,34 @@ export default function App() {
                 <div className="receipt-code">|||| ||| || |||| | |||</div>
               </article>
               <button className="receipt-done" onClick={() => setReceiptData(null)}>Tuck it away</button>
+            </div>
+          </div>
+        )}
+
+        {sessionReceipt && (
+          <div className="stamp-celebration" onMouseDown={() => setSessionReceipt(null)}>
+            <div className="receipt-stage" onMouseDown={(event) => event.stopPropagation()}>
+              <div className="stamp-strike" aria-hidden="true">
+                <span>STUDY LOG</span>
+                <strong>SAVED!</strong>
+              </div>
+              <article className="spot-receipt session-receipt">
+                <div className="receipt-teeth" />
+                <img className="receipt-bunny" src="/bunny_hug.svg" alt="" />
+                <p className="receipt-hello">nice work!</p>
+                <p className="receipt-kicker">✦ STUDY RECEIPT ✦</p>
+                <div className="receipt-rule" />
+                <dl>
+                  <div><dt>Hours</dt><dd>{sessionReceipt.hours}h</dd></div>
+                  <div><dt>Spot</dt><dd>{sessionReceipt.place}</dd></div>
+                  <div><dt>Studying</dt><dd>{sessionReceipt.subject}</dd></div>
+                  <div><dt>Logged</dt><dd>{new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}</dd></div>
+                </dl>
+                <div className="receipt-dots">• • • • • • • • • •</div>
+                <p className="receipt-thanks">Another hop forward.</p>
+                <div className="receipt-code">|||| ||| || |||| | |||</div>
+              </article>
+              <button className="receipt-done" onClick={() => setSessionReceipt(null)}>Tuck it away</button>
             </div>
           </div>
         )}
