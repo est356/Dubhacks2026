@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from "react";
+// [google-maps] real map + Places search live in their own files (not Figma-generated)
+import StudyMap, { hasGoogleMapsKey } from "./components/StudyMap";
 
 type Spot = {
   id: number;
@@ -14,6 +16,15 @@ type Spot = {
   rating: number;
   reviews: number;
   highlights: string[];
+  openEarly: boolean;
+  openLate: boolean;
+  hours: string;
+  address: string;
+  communityInput?: {
+    busyDay: string;
+    busyness: number[];
+    price: string;
+  };
 };
 
 const spots: Spot[] = [
@@ -32,6 +43,10 @@ const spots: Spot[] = [
     rating: 4.8,
     reviews: 86,
     highlights: ["great outlets", "quiet", "fast wifi"],
+    openEarly: true,
+    openLate: true,
+    hours: "7am–10pm",
+    address: "142 Oak Street",
   },
   {
     id: 2,
@@ -48,6 +63,10 @@ const spots: Spot[] = [
     rating: 4.9,
     reviews: 124,
     highlights: ["very quiet", "lots of seats", "free"],
+    openEarly: true,
+    openLate: false,
+    hours: "8am–8pm",
+    address: "88 Cedar Avenue",
   },
   {
     id: 3,
@@ -64,6 +83,10 @@ const spots: Spot[] = [
     rating: 4.6,
     reviews: 53,
     highlights: ["fast wifi", "open late", "moderate"],
+    openEarly: false,
+    openLate: true,
+    hours: "9am–11pm",
+    address: "306 Little Market Lane",
   },
   {
     id: 4,
@@ -80,8 +103,157 @@ const spots: Spot[] = [
     rating: 4.4,
     reviews: 31,
     highlights: ["no outlets", "peaceful", "spacious"],
+    openEarly: true,
+    openLate: false,
+    hours: "6am–8pm",
+    address: "12 Botanic Walk",
   },
 ];
+
+type PlaceResult = {
+  name: string;
+  address: string;
+  area: string;
+  type: Spot["type"];
+  position: Spot["position"];
+  hours: string;
+  openEarly: boolean;
+  openLate: boolean;
+};
+
+const placeDirectory: PlaceResult[] = [
+  ...spots.map(({ name, address, area, type, position, hours, openEarly, openLate }) => ({
+    name,
+    address,
+    area,
+    type,
+    position,
+    hours,
+    openEarly,
+    openLate,
+  })),
+  {
+    name: "Paper Moon Café",
+    address: "221 Willow Street",
+    area: "North Loop",
+    type: "coffee",
+    position: { left: "76%", top: "66%" },
+    hours: "7am–9pm",
+    openEarly: true,
+    openLate: false,
+  },
+  {
+    name: "Sideshow Books",
+    address: "504 Pico Boulevard",
+    area: "Mid-City",
+    type: "library",
+    position: { left: "45%", top: "20%" },
+    hours: "10am–10pm",
+    openEarly: false,
+    openLate: true,
+  },
+  {
+    name: "Common Ground Coffee",
+    address: "73 Garden Row",
+    area: "Garden District",
+    type: "coffee",
+    position: { left: "67%", top: "43%" },
+    hours: "6:30am–11pm",
+    openEarly: true,
+    openLate: true,
+  },
+  {
+    name: "Atlas Study Hall",
+    address: "19 College Way",
+    area: "Old Town",
+    type: "library",
+    position: { left: "35%", top: "48%" },
+    hours: "8am–12am",
+    openEarly: true,
+    openLate: true,
+  },
+];
+
+type StudyProfile = {
+  noise: string;
+  outlets: string;
+  seating: string;
+  busyness: string;
+  price: string;
+  wifi: string;
+  vibes: string[];
+  review: string;
+};
+
+const studyProfiles: Record<number, StudyProfile> = {
+  1: {
+    noise: "quiet",
+    outlets: "at every table",
+    seating: "2–4 people",
+    busyness: "busiest 11am–2pm",
+    price: "$$ · $10–20",
+    wifi: "fast",
+    vibes: ["cozy", "focused", "warm light"],
+    review: "The window counter is perfect for a long study block, and nobody minds if you stay awhile.",
+  },
+  2: {
+    noise: "very quiet",
+    outlets: "at a few tables",
+    seating: "1–6 people",
+    busyness: "calm after 3pm",
+    price: "free",
+    wifi: "fast",
+    vibes: ["silent", "bookish", "spacious"],
+    review: "Come for the desk lamps and deep-focus silence. The back room usually has an open seat.",
+  },
+  3: {
+    noise: "chatter",
+    outlets: "at every table",
+    seating: "2–8 people",
+    busyness: "busy 9am–12pm",
+    price: "$$ · $10–20",
+    wifi: "fast",
+    vibes: ["social", "bright", "good playlists"],
+    review: "Big communal tables make this the best choice for a group session or a working coffee date.",
+  },
+  4: {
+    noise: "quiet",
+    outlets: "no tables",
+    seating: "1–5 people",
+    busyness: "busier on weekends",
+    price: "free",
+    wifi: "none",
+    vibes: ["sunny", "peaceful", "outdoors"],
+    review: "Bring a charged laptop and a blanket. It is especially lovely before the afternoon crowd arrives.",
+  },
+};
+
+function getStudyProfile(spot: Spot): StudyProfile {
+  const established = studyProfiles[spot.id];
+  if (established) {
+    return {
+      ...established,
+      busyness: spot.communityInput
+        ? `${spot.communityInput.busyDay.toLowerCase()} · community reported`
+        : established.busyness,
+      price: spot.communityInput
+        ? `${spot.communityInput.price} · community reported`
+        : established.price,
+    };
+  }
+  return {
+    noise: spot.highlights[0] || "chatter",
+    outlets: spot.highlights[1] || "at a few tables",
+    seating: "2–4 people",
+    busyness: spot.communityInput
+      ? `${spot.communityInput.busyDay.toLowerCase()} · community reported`
+      : "moderate right now",
+    price: spot.communityInput ? `${spot.communityInput.price} · community reported` : "$$ · $10–20",
+    wifi: spot.highlights[2] || "medium",
+    vibes: spot.highlights,
+    review: spot.note,
+  };
+}
 
 type Activity = {
   id: number;
@@ -137,11 +309,24 @@ const starterActivities: Activity[] = [
   { id: 3, friendId: 4, hours: "3", place: "Juniper Coffee", subject: "Design portfolio", when: "Yesterday" },
 ];
 
+const headerTaglines = [
+  "let's find your new study spot!",
+  "glad you're here!",
+  "it's a great day for a coffee",
+];
+
+function getOpeningTaglineIndex() {
+  const previous = Number(window.localStorage.getItem("study-hopper-tagline") ?? -1);
+  const next = (previous + 1) % headerTaglines.length;
+  window.localStorage.setItem("study-hopper-tagline", String(next));
+  return next;
+}
+
 function Icon({
   name,
   size = 24,
 }: {
-  name: "coffee" | "library" | "outdoors" | "map" | "list" | "heart" | "plus" | "search" | "close";
+  name: "coffee" | "library" | "outdoors" | "map" | "list" | "heart" | "plus" | "search" | "close" | "stamp";
   size?: number;
 }) {
   const common = {
@@ -209,6 +394,12 @@ function Icon({
         <path d="m16 16 4 4" />
       </svg>
     );
+  if (name === "stamp")
+    return (
+      <svg {...common}>
+        <path d="M8.5 13.5c.4-1.8 1.6-2.8 1.6-5.2 0-2.1.5-4.3 1.9-4.3s1.9 2.2 1.9 4.3c0 2.4 1.2 3.4 1.6 5.2M6.5 14h11l1 3H5.5l1-3ZM5 19h14v2H5z" />
+      </svg>
+    );
   return (
     <svg {...common}>
       <path d="m5 5 14 14M19 5 5 19" />
@@ -219,35 +410,68 @@ function Icon({
 function Stamp({
   spot,
   active,
+  stamped,
   onClick,
+  onSave,
 }: {
   spot: Spot;
   active: boolean;
+  stamped: boolean;
   onClick: () => void;
+  onSave: () => void;
 }) {
   return (
-    <button
+    <div
       className={`map-stamp ${active ? "map-stamp--active" : ""}`}
-      style={{ left: spot.position.left, top: spot.position.top, color: spot.color }}
+      style={{
+        left: spot.position.left,
+        top: spot.position.top,
+        color: spot.color,
+        "--spot-color": spot.color,
+      } as React.CSSProperties}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onClick();
+      }}
+      role="button"
+      tabIndex={0}
       aria-label={`View ${spot.name}`}
     >
-      <span className="stamp-ring">
-        <Icon name={spot.type} size={29} />
+      <span className="stamp-photo">
+        <img src={spot.image} alt="" />
       </span>
-      <span className="stamp-name">{spot.name.split(" ")[0]}</span>
-    </button>
+      <span className="stamp-type-badge">
+        <Icon name={spot.type} size={12} />
+      </span>
+      <span className="stamp-name">{spot.name}</span>
+      {!stamped && (
+        <button
+          className="marker-save-button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onSave();
+          }}
+          aria-label={`Save ${spot.name}`}
+        >
+          SAVE!
+        </button>
+      )}
+    </div>
   );
 }
 
 function SpotCard({
   spot,
+  stamped,
   favorite,
   onFavorite,
+  onStamp,
 }: {
   spot: Spot;
+  stamped: boolean;
   favorite: boolean;
   onFavorite: () => void;
+  onStamp: () => void;
 }) {
   return (
     <article className="spot-card">
@@ -262,13 +486,22 @@ function SpotCard({
           <h3>{spot.name}</h3>
           <p className="spot-rating"><b>★ {spot.rating}</b> <span>({spot.reviews})</span></p>
         </div>
-        <button
-          className={`heart-button ${favorite ? "is-favorite" : ""}`}
-          onClick={onFavorite}
-          aria-label={favorite ? `Remove ${spot.name} from favorites` : `Favorite ${spot.name}`}
-        >
-          <Icon name="heart" size={21} />
-        </button>
+        {stamped ? (
+          <div className="list-place-actions">
+            <span className="mini-visited" title="You saved this spot">SAVED!</span>
+            <button
+              className={`heart-button ${favorite ? "is-favorite" : ""}`}
+              onClick={onFavorite}
+              aria-label={favorite ? `Remove ${spot.name} from favorites` : `Favorite ${spot.name}`}
+            >
+              <Icon name="heart" size={21} />
+            </button>
+          </div>
+        ) : (
+          <button className="list-stamp-button" onClick={onStamp}>
+            SAVE!
+          </button>
+        )}
         <p className="note">“{spot.note}”</p>
         <div className="tags">
           {spot.tags.map((tag) => (
@@ -282,6 +515,7 @@ function SpotCard({
 
 function FriendActivity({
   activities,
+  leaderboardHours,
   selectedFriend,
   setSelectedFriend,
   logOpen,
@@ -290,6 +524,7 @@ function FriendActivity({
   onBack,
 }: {
   activities: Activity[];
+  leaderboardHours: Record<number, number>;
   selectedFriend: number | null;
   setSelectedFriend: (id: number | null) => void;
   logOpen: boolean;
@@ -301,6 +536,10 @@ function FriendActivity({
     ? activities.filter((activity) => activity.friendId === selectedFriend)
     : activities;
   const activeFriend = friends.find((friend) => friend.id === selectedFriend);
+  const leaderboard = [...friends]
+    .map((friend) => ({ ...friend, total: leaderboardHours[friend.id] ?? 0 }))
+    .sort((a, b) => b.total - a.total);
+  const leadingHours = Math.max(...leaderboard.map((friend) => friend.total), 1);
 
   return (
     <section className="friend-page">
@@ -369,6 +608,56 @@ function FriendActivity({
           </div>
         </section>
 
+        <section className="nearby-section">
+          <div className="section-title">
+            <div>
+              <p className="kicker">PICKS FROM YOUR CIRCLE</p>
+              <h2>Try somewhere nearby</h2>
+            </div>
+            <span className="tiny-distance">under 15 min</span>
+          </div>
+          <div className="recommendation-row">
+            {[spots[2], spots[0], spots[1]].map((spot, index) => (
+              <article className="recommendation" key={spot.id}>
+                <div>
+                  <img src={spot.image} alt={`${spot.name} interior`} />
+                  <span>{spot.walk}</span>
+                </div>
+                <h3>{spot.name}</h3>
+                <p>{index + 2} friends saved this</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="leaderboard-section">
+          <div className="section-title">
+            <div>
+              <p className="kicker">FRIENDLY COMPETITION</p>
+              <h2>Study leaderboard</h2>
+            </div>
+            <span className="week-label">this week</span>
+          </div>
+          <div className="leaderboard-list">
+            {leaderboard.map((friend, index) => (
+              <button
+                key={friend.id}
+                className={`leaderboard-row ${friend.id === 1 ? "is-you" : ""}`}
+                onClick={() => setSelectedFriend(friend.id)}
+                aria-label={`View ${friend.name}'s activity`}
+              >
+                <span className="leaderboard-rank">{index + 1}</span>
+                <img src={friend.image} alt="" />
+                <span className="leaderboard-progress">
+                  <span><b>{friend.name}</b><strong>{friend.total.toFixed(friend.total % 1 ? 1 : 0)}h</strong></span>
+                  <i><em style={{ width: `${Math.max(9, (friend.total / leadingHours) * 100)}%` }} /></i>
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="leaderboard-note">Log a session and watch your bar hop forward.</p>
+        </section>
+
         <section className="feed-section">
           <div className="section-title">
             <div>
@@ -395,121 +684,591 @@ function FriendActivity({
           </div>
         </section>
 
-        <section className="nearby-section">
-          <div className="section-title">
-            <div>
-              <p className="kicker">PICKS FROM YOUR CIRCLE</p>
-              <h2>Try somewhere nearby</h2>
-            </div>
-            <span className="tiny-distance">under 15 min</span>
-          </div>
-          <div className="recommendation-row">
-            {[spots[2], spots[0], spots[1]].map((spot, index) => (
-              <article className="recommendation" key={spot.id}>
-                <div>
-                  <img src={spot.image} alt={`${spot.name} interior`} />
-                  <span>{spot.walk}</span>
-                </div>
-                <h3>{spot.name}</h3>
-                <p>{index + 2} friends saved this</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
       </div>
     </section>
   );
 }
 
-const ratingCategories = [
-  { key: "outlets", label: "Outlet availability", low: "none", high: "plenty" },
-  { key: "noise", label: "Noise level", low: "silent", high: "lively" },
-  { key: "seating", label: "Seating space", low: "tight", high: "roomy" },
-  { key: "busyness", label: "Busyness level", low: "calm", high: "packed" },
-  { key: "price", label: "Food price range", low: "$", high: "$$$$" },
-  { key: "wifi", label: "Wi-fi speed / strength", low: "spotty", high: "zippy" },
-  { key: "atmosphere", label: "Study atmosphere", low: "not ideal", high: "perfect" },
-  { key: "hours", label: "Store hours", low: "short", high: "open late" },
-] as const;
-
-function RatingScale({
+function ChoiceMetric({
   label,
-  low,
-  high,
+  options,
   value,
   onChange,
 }: {
   label: string;
-  low: string;
-  high: string;
-  value: number;
-  onChange: (value: number) => void;
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
 }) {
   return (
-    <div className="rating-row">
-      <div className="rating-label"><strong>{label}</strong><span>{value}/5</span></div>
-      <div className="rating-scale" role="group" aria-label={`${label}: ${value} out of 5`}>
-        {[1, 2, 3, 4, 5].map((score) => (
+    <div className="choice-metric">
+      <strong>{label}</strong>
+      <div role="group" aria-label={label}>
+        {options.map((option) => (
           <button
             type="button"
-            key={score}
-            className={score <= value ? "filled" : ""}
-            onClick={() => onChange(score)}
-            aria-label={`${score} out of 5`}
+            key={option}
+            className={option === value ? "active" : ""}
+            onClick={() => onChange(option)}
           >
-            {label.includes("price") ? "$" : "★"}
+            {option}
           </button>
         ))}
       </div>
-      <div className="rating-ends"><span>{low}</span><span>{high}</span></div>
+    </div>
+  );
+}
+
+function PlaceDetailSheet({
+  spot,
+  stamped,
+  favorite,
+  onFavorite,
+  onStamp,
+  onClose,
+  onRate,
+}: {
+  spot: Spot;
+  stamped: boolean;
+  favorite: boolean;
+  onFavorite: () => void;
+  onStamp: () => void;
+  onClose: () => void;
+  onRate: () => void;
+}) {
+  const profile = getStudyProfile(spot);
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const detailDrag = useRef<number | null>(null);
+  const reviews = [
+    { quote: profile.review, author: "a fellow Study Hopper" },
+    { quote: `The ${profile.noise} atmosphere and ${profile.wifi} Wi-fi made it easy to settle in and get things done.`, author: "Maya · 2 days ago" },
+    { quote: `${profile.outlets}, with enough room for ${profile.seating}. I would definitely come back for another session.`, author: "Leo · last week" },
+  ];
+  const busyValues = spot.communityInput?.busyness ?? [24, 32, 48, 71, 94, 80, 61, 43, 29];
+  const busyLabels = spot.communityInput ? ["8am", "12pm", "4pm", "8pm"] : ["8", "", "10", "", "12", "", "2", "", "4"];
+  const metrics = [
+    ["Noise", profile.noise],
+    ["Outlets", profile.outlets],
+    ["Seating", profile.seating],
+    ["Wi-fi", profile.wifi],
+    ["Price", profile.price],
+    ["Busy times", profile.busyness],
+  ];
+
+  return (
+    <div className="place-detail-backdrop" onMouseDown={onClose}>
+      <article
+        className="place-detail-sheet"
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => {
+          if ((event.target as HTMLElement).closest("button")) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          detailDrag.current = event.clientY;
+        }}
+        onPointerUp={(event) => {
+          if (detailDrag.current !== null && event.clientY - detailDrag.current > 80) onClose();
+          detailDrag.current = null;
+        }}
+      >
+        <div className="detail-drag-handle"><span /><small>drag down to map</small></div>
+        <div className="detail-hero">
+          <img src={spot.image} alt={`${spot.name} study space`} />
+          <span className="detail-tape" />
+          <button className="detail-close" onClick={onClose} aria-label="Close place details">
+            <Icon name="close" size={20} />
+          </button>
+          <div className="detail-stamp" style={{ color: spot.color }}>
+            <Icon name={spot.type} size={27} />
+          </div>
+        </div>
+
+        <div className="detail-content">
+          <div className="detail-title">
+            <div>
+              <p className="eyebrow">{spot.area} · {spot.walk}</p>
+              <h2>{spot.name}</h2>
+              <p className="detail-address">{spot.address}</p>
+            </div>
+            <div className="detail-place-actions">
+              {stamped ? (
+                <>
+                  <span className="visited-stamp" title="You saved this spot">SAVED!</span>
+                  <button
+                    className={`heart-button ${favorite ? "is-favorite" : ""}`}
+                    onClick={onFavorite}
+                    aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    <Icon name="heart" size={23} />
+                  </button>
+                </>
+              ) : (
+                <button className="stamp-this-button" onClick={onStamp}>
+                  SAVE!
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="detail-rating-summary">
+            <strong>{spot.rating}</strong>
+            <div>
+              <span>{"★★★★★".split("").map((star, index) => <i key={index}>{star}</i>)}</span>
+              <p>Based on {spot.reviews} study ratings</p>
+            </div>
+            <button onClick={onRate}>Rate it</button>
+          </div>
+
+          <section className="study-snapshot">
+            <div className="detail-section-title">
+              <div><p className="kicker">THE STUDY REPORT</p><h3>Good to know</h3></div>
+              <span>community rated</span>
+            </div>
+            <div className="metric-grid">
+              {metrics.map(([label, value]) => (
+                <div key={label}>
+                  <small>{label}</small>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="detail-busy">
+            <div>
+              <p className="kicker">POPULAR TIMES</p>
+              <h3>Usually {profile.busyness}</h3>
+            </div>
+            <div className="detail-busy-bars">
+              {busyValues.map((height, index) => (
+                <span key={index}>
+                  <i style={{ height: `${height}%` }} />
+                  <small>{busyLabels[index]}</small>
+                </span>
+              ))}
+            </div>
+          </section>
+
+          <section className="hours-card">
+            <div><span className="open-dot" /><strong>Open today</strong></div>
+            <b>{spot.hours}</b>
+            {spot.openLate && <em>open past 9pm</em>}
+          </section>
+
+          <section className="vibe-section">
+            <div className="detail-section-title">
+              <div><p className="kicker">DA VIBES!</p><h3>What people are saying</h3></div>
+              <span>{reviewIndex + 1} / {reviews.length}</span>
+            </div>
+            <div className="detail-vibes">
+              {profile.vibes.map((vibe) => <span key={vibe}>{vibe}</span>)}
+            </div>
+            <div className="review-stack">
+              <blockquote key={reviewIndex}>
+                “{reviews[reviewIndex].quote}”
+                <footer>— {reviews[reviewIndex].author}</footer>
+              </blockquote>
+              <div className="review-controls">
+                <button
+                  onClick={() => setReviewIndex((current) => (current - 1 + reviews.length) % reviews.length)}
+                  aria-label="Previous review"
+                >
+                  ←
+                </button>
+                <div>
+                  {reviews.map((_, index) => (
+                    <button
+                      key={index}
+                      className={index === reviewIndex ? "active" : ""}
+                      onClick={() => setReviewIndex(index)}
+                      aria-label={`Show review ${index + 1}`}
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={() => setReviewIndex((current) => (current + 1) % reviews.length)}
+                  aria-label="Next review"
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+type ChatMessage = {
+  id: number;
+  from: "hop" | "user";
+  text: string;
+  spotId?: number;
+};
+
+function AskHopsChat({
+  spots,
+  stampedSpots,
+  onClose,
+  onViewSpot,
+  onSaveSpot,
+}: {
+  spots: Spot[];
+  stampedSpots: number[];
+  onClose: () => void;
+  onViewSpot: (spot: Spot) => void;
+  onSaveSpot: (spot: Spot) => void;
+}) {
+  const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: 1,
+      from: "hop",
+      text: "Hi, I’m Hops! Tell me what kind of study day you’re having, and I’ll find you a cozy match.",
+    },
+  ]);
+
+  function findMatch(request: string) {
+    const need = request.toLowerCase();
+    if (need.match(/outside|sun|park|fresh air/)) return spots.find((spot) => spot.type === "outdoors") ?? spots[0];
+    if (need.match(/silent|quiet|focus|exam|library/)) return spots.find((spot) => spot.type === "library") ?? spots[0];
+    if (need.match(/late|night|evening/)) return spots.find((spot) => spot.openLate) ?? spots[0];
+    if (need.match(/group|friend|social|big table/)) return spots.find((spot) => spot.name.includes("Juniper")) ?? spots[0];
+    if (need.match(/wifi|outlet|laptop|zoom/)) {
+      return spots.find((spot) => spot.highlights.some((item) => item.includes("wifi") || item.includes("outlet"))) ?? spots[0];
+    }
+    if (need.match(/cheap|free|budget/)) return spots.find((spot) => getStudyProfile(spot).price === "free") ?? spots[0];
+    return spots.find((spot) => spot.type === "coffee") ?? spots[0];
+  }
+
+  function sendMessage(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || isTyping) return;
+    const match = findMatch(trimmed);
+    setMessages((current) => [...current, { id: Date.now(), from: "user", text: trimmed }]);
+    setInput("");
+    setIsTyping(true);
+    window.setTimeout(() => {
+      const profile = getStudyProfile(match);
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 1,
+          from: "hop",
+          text: `I think ${match.name} fits! It’s ${profile.noise}, has ${profile.outlets}, and the Wi-fi is ${profile.wifi}.`,
+          spotId: match.id,
+        },
+      ]);
+      setIsTyping(false);
+    }, 550);
+  }
+
+  function submitMessage(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    sendMessage(input);
+  }
+
+  return (
+    <div className="chat-backdrop">
+      <section className="hops-chat" aria-label="Ask Hops study companion">
+        <header className="chat-header">
+          <div className="chat-avatar">
+            <img src="/bunny_mascot.png" alt="" />
+            <span />
+          </div>
+          <div>
+            <p className="kicker">YOUR STUDY COMPANION</p>
+            <h2>Ask Hops</h2>
+            <small>here to find your next spot</small>
+          </div>
+          <button onClick={onClose} aria-label="Close Ask Hops"><Icon name="close" size={20} /></button>
+        </header>
+
+        <div className="chat-messages">
+          {messages.map((message) => {
+            const recommendation = message.spotId ? spots.find((spot) => spot.id === message.spotId) : null;
+            const profile = recommendation ? getStudyProfile(recommendation) : null;
+            return (
+              <div className={`chat-message-row ${message.from}`} key={message.id}>
+                {message.from === "hop" && <img src="/bunny_mascot.png" alt="Hops" />}
+                <div>
+                  <p>{message.text}</p>
+                  {recommendation && profile && (
+                    <article className="chat-recommendation">
+                      <div className="chat-rec-photo">
+                        <img src={recommendation.image} alt={`${recommendation.name} interior`} />
+                        <span>{recommendation.walk}</span>
+                      </div>
+                      <div className="chat-rec-copy">
+                        <div>
+                          <p className="eyebrow">{recommendation.area}</p>
+                          <h3>{recommendation.name}</h3>
+                          <small>{recommendation.address}</small>
+                        </div>
+                        <strong>★ {recommendation.rating} · {recommendation.reviews}</strong>
+                        <div className="chat-rec-stats">
+                          <span>{profile.noise}</span>
+                          <span>{profile.wifi} wi-fi</span>
+                          <span>{recommendation.hours}</span>
+                        </div>
+                        <div className="chat-rec-actions">
+                          <button onClick={() => onViewSpot(recommendation)}>View spot</button>
+                          <button
+                            className={stampedSpots.includes(recommendation.id) ? "saved" : ""}
+                            onClick={() => !stampedSpots.includes(recommendation.id) && onSaveSpot(recommendation)}
+                          >
+                            {stampedSpots.includes(recommendation.id) ? "SAVED!" : "SAVE!"}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {isTyping && (
+            <div className="chat-message-row hop">
+              <img src="/bunny_mascot.png" alt="" />
+              <div className="typing-bubble"><span /><span /><span /></div>
+            </div>
+          )}
+        </div>
+
+        {messages.length === 1 && (
+          <div className="chat-prompts">
+            {["Somewhere quiet", "Fast Wi-fi + outlets", "Open late", "Good for a group"].map((prompt) => (
+              <button key={prompt} onClick={() => sendMessage(prompt)}>{prompt}</button>
+            ))}
+          </div>
+        )}
+
+        <form className="chat-composer" onSubmit={submitMessage}>
+          <label>
+            <span className="sr-only">Describe your study needs</span>
+            <textarea
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  sendMessage(input);
+                }
+              }}
+              placeholder="I need somewhere quiet with outlets..."
+              rows={1}
+            />
+          </label>
+          <button type="submit" aria-label="Send message">↑</button>
+        </form>
+      </section>
     </div>
   );
 }
 
 export default function App() {
+  const [allSpots, setAllSpots] = useState(spots);
   const [page, setPage] = useState<"places" | "friends">("places");
   const [view, setView] = useState<"map" | "list">("map");
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(1);
+  const [stampedSpots, setStampedSpots] = useState<number[]>([1, 3]);
   const [favorites, setFavorites] = useState<number[]>([1, 3]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [taglineIndex, setTaglineIndex] = useState(getOpeningTaglineIndex);
+  const [starSpin, setStarSpin] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
+  const [sheetMode, setSheetMode] = useState<"stamp" | "rate">("stamp");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
+  const [receiptData, setReceiptData] = useState<null | {
+    name: string;
+    address: string;
+    area: string;
+    hours: string;
+    rating: number;
+    type: Spot["type"];
+  }>(null);
   const [selectedFriend, setSelectedFriend] = useState<number | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [activities, setActivities] = useState(starterActivities);
-  const [newSpotRatings, setNewSpotRatings] = useState<Record<string, number>>(
-    Object.fromEntries(ratingCategories.map((category) => [category.key, 3])),
-  );
+  const [leaderboardHours, setLeaderboardHours] = useState<Record<number, number>>({
+    1: 8.5,
+    2: 12,
+    3: 6,
+    4: 9.5,
+  });
+  const [generalRating, setGeneralRating] = useState(0);
+  const [ratingError, setRatingError] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewDetails, setReviewDetails] = useState({
+    noise: "chatter",
+    outlets: "at a few tables",
+    wifi: "medium",
+    seats: 4,
+    openLate: false,
+    busyDay: "Weekdays",
+    busyness: [25, 72, 58, 30],
+    price: "$$",
+  });
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
+  const [placeError, setPlaceError] = useState(false);
+  const [mapView, setMapView] = useState({ x: 0, y: 0, scale: 1 });
+  // [google-maps] true when we show the original hand-drawn map (no key / Maps failed to load)
+  const [fakeMap, setFakeMap] = useState(!hasGoogleMapsKey);
+  const mapDrag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const cardDrag = useRef<number | null>(null);
   const touchStart = useRef<number | null>(null);
+
+  const placeSuggestions = useMemo(() => {
+    const search = placeQuery.trim().toLowerCase();
+    if (search.length < 2 || selectedPlace?.name === placeQuery) return [];
+    return placeDirectory
+      .filter((place) => `${place.name} ${place.address} ${place.area}`.toLowerCase().includes(search))
+      .slice(0, 5);
+  }, [placeQuery, selectedPlace]);
 
   const visibleSpots = useMemo(
     () =>
-      spots.filter(
+      allSpots.filter(
         (spot) =>
-          (filter === "all" || spot.type === filter || (filter === "saved" && favorites.includes(spot.id))) &&
+          (filter === "all" ||
+            spot.type === filter ||
+            (filter === "saved" && favorites.includes(spot.id)) ||
+            (filter === "early" && spot.openEarly) ||
+            (filter === "late" && spot.openLate)) &&
           spot.name.toLowerCase().includes(query.toLowerCase()),
       ),
-    [filter, favorites, query],
+    [allSpots, filter, favorites, query],
   );
 
-  const selectedSpot = spots.find((spot) => spot.id === selected) ?? spots[0];
+  const selectedSpot = allSpots.find((spot) => spot.id === selected) ?? allSpots[0];
 
   function toggleFavorite(id: number) {
+    if (!stampedSpots.includes(id)) return;
     setFavorites((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
   function saveNewSpot(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!selectedPlace) {
+      setPlaceError(true);
+      return;
+    }
+    if (!generalRating) {
+      setRatingError(true);
+      return;
+    }
     const form = new FormData(event.currentTarget);
-    const name = String(form.get("name") || "New spot");
-    setSavedMessage(`${name} stamped into your list!`);
+    const name = selectedPlace.name;
+    const existing = allSpots.find((spot) => spot.name === selectedPlace.name);
+    if (existing) {
+      setSelected(existing.id);
+      if (sheetMode === "stamp") {
+        setStampedSpots((current) => current.includes(existing.id) ? current : [...current, existing.id]);
+      }
+      setAllSpots((current) =>
+        current.map((spot) =>
+          spot.id === existing.id
+            ? {
+                ...spot,
+                rating: Number(((spot.rating * spot.reviews + generalRating) / (spot.reviews + 1)).toFixed(1)),
+                reviews: spot.reviews + 1,
+                highlights: reviewOpen
+                  ? [reviewDetails.noise, reviewDetails.outlets, `${reviewDetails.wifi} wifi`]
+                  : spot.highlights,
+                communityInput: reviewOpen
+                  ? {
+                      busyDay: reviewDetails.busyDay,
+                      busyness: reviewDetails.busyness,
+                      price: reviewDetails.price,
+                    }
+                  : spot.communityInput,
+              }
+            : spot,
+        ),
+      );
+    } else {
+      const newSpot: Spot = {
+        id: Date.now(),
+        name,
+        address: selectedPlace.address,
+        area: selectedPlace.area,
+        walk: "new",
+        type: selectedPlace.type,
+        tags: ["new stamp", reviewDetails.wifi],
+        note: String(form.get("note") || "A newly discovered study spot"),
+        image: "https://images.unsplash.com/photo-1669846125517-6ea5fd9dc9af?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=900&h=700",
+        color: "#b94d74",
+        position: selectedPlace.position,
+        rating: generalRating,
+        reviews: 1,
+        highlights: [reviewDetails.noise, reviewDetails.outlets, `${reviewDetails.wifi} wifi`],
+        openEarly: selectedPlace.openEarly,
+        openLate: selectedPlace.openLate,
+        hours: selectedPlace.hours,
+        communityInput: {
+          busyDay: reviewDetails.busyDay,
+          busyness: reviewDetails.busyness,
+          price: reviewDetails.price,
+        },
+      };
+      setAllSpots((current) => [...current, newSpot]);
+      setSelected(newSpot.id);
+      if (sheetMode === "stamp") setStampedSpots((current) => [...current, newSpot.id]);
+    }
+    setFilter("all");
+    setPage("places");
+    setView("map");
+    setSavedMessage(sheetMode === "rate" ? `Rating added for ${name}!` : `${name} stamped into your list!`);
+    if (sheetMode === "stamp") {
+      setReceiptData({
+        name,
+        address: selectedPlace.address,
+        area: selectedPlace.area,
+        hours: selectedPlace.hours,
+        rating: generalRating,
+        type: selectedPlace.type,
+      });
+    }
     setTimeout(() => {
       setAddOpen(false);
       setSavedMessage("");
+      setGeneralRating(0);
+      setRatingError(false);
+      setReviewOpen(false);
+      setPlaceQuery("");
+      setSelectedPlace(null);
+      setPlaceError(false);
     }, 1200);
+  }
+
+  function changeZoom(amount: number) {
+    setMapView((current) => ({ ...current, scale: Math.min(2.2, Math.max(.65, current.scale + amount)) }));
+  }
+
+  function startMapDrag(event: React.PointerEvent<HTMLElement>) {
+    if ((event.target as HTMLElement).closest("button, [role='button']")) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    mapDrag.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: mapView.x,
+      originY: mapView.y,
+    };
+  }
+
+  function moveMap(event: React.PointerEvent<HTMLElement>) {
+    if (!mapDrag.current) return;
+    setMapView((current) => ({
+      ...current,
+      x: mapDrag.current!.originX + event.clientX - mapDrag.current!.startX,
+      y: mapDrag.current!.originY + event.clientY - mapDrag.current!.startY,
+    }));
   }
 
   function logActivity(event: React.FormEvent<HTMLFormElement>) {
@@ -526,6 +1285,10 @@ export default function App() {
       },
       ...current,
     ]);
+    setLeaderboardHours((current) => ({
+      ...current,
+      1: (current[1] ?? 0) + Number(form.get("hours") || 1),
+    }));
     setSelectedFriend(null);
     setLogOpen(false);
   }
@@ -550,12 +1313,46 @@ export default function App() {
           <>
         <header className="topbar">
           <div>
-            <p className="kicker">YOUR LITTLE FIELD GUIDE</p>
-            <h1>Study <span>Spots</span></h1>
+            <h1>Study <span>Hopper</span></h1>
+            <button
+              type="button"
+              className="tagline-row"
+              onClick={() => {
+                const next = (taglineIndex + 1) % headerTaglines.length;
+                setTaglineIndex(next);
+                setStarSpin((current) => current + 1);
+                window.localStorage.setItem("study-hopper-tagline", String(next));
+              }}
+              aria-label={`Change message. Current message: ${headerTaglines[taglineIndex]}`}
+            >
+              <span className="kicker rotating-tagline" key={taglineIndex}>{headerTaglines[taglineIndex]}</span>
+              <span
+                className="tagline-star"
+              >
+                <svg key={starSpin} className={starSpin ? "spin" : ""} viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m12 1.8 2.8 6.6 7.1.7-5.4 4.7 1.6 7-6.1-3.7-6.1 3.7 1.6-7L2.1 9.1l7.1-.7L12 1.8Z" />
+                </svg>
+              </span>
+            </button>
           </div>
-          <button className="round-button" onClick={() => setSearchOpen((open) => !open)} aria-label="Search spots">
-            {searchOpen ? <Icon name="close" size={22} /> : <Icon name="search" size={22} />}
-          </button>
+          <div className="header-actions">
+            <button className="round-button" onClick={() => setSearchOpen((open) => !open)} aria-label="Search spots">
+              {searchOpen ? <Icon name="close" size={22} /> : <Icon name="search" size={22} />}
+            </button>
+            <button className="mascot-wrap" onClick={() => setChatOpen(true)} aria-label="Open Ask Hops">
+              <div className="mascot-badge">
+                <img className="bunny-mascot" src="/bunny_mascot.png" alt="" />
+              </div>
+              <svg className="mascot-label" viewBox="0 0 72 25" aria-hidden="true">
+                <defs>
+                  <path id="ask-hops-curve" d="M 7 3 Q 36 24 65 3" />
+                </defs>
+                <text>
+                  <textPath href="#ask-hops-curve" startOffset="50%" textAnchor="middle">ASK HOPS</textPath>
+                </text>
+              </svg>
+            </button>
+          </div>
         </header>
 
         {searchOpen && (
@@ -573,54 +1370,199 @@ export default function App() {
         <div className="filter-row" aria-label="Filter study spots">
           {[
             ["all", "All spots"],
+            ["saved", "Favorites"],
             ["coffee", "Coffee"],
             ["library", "Libraries"],
             ["outdoors", "Outside"],
-            ["saved", "Saved"],
+            ["early", "Open early"],
+            ["late", "Open past 9"],
           ].map(([value, label]) => (
             <button
               key={value}
-              onClick={() => setFilter(value)}
+              onClick={() => {
+                setFilter(value);
+                if (value === "saved" && !favorites.includes(selected) && favorites[0]) setSelected(favorites[0]);
+              }}
               className={filter === value ? "active" : ""}
             >
+              {value === "saved" && <Icon name="heart" size={13} />}
               {label}
             </button>
           ))}
         </div>
 
         {view === "map" ? (
-          <section className="map-view">
-            <div className="map-landmark landmark-one">OLD TOWN</div>
-            <div className="map-landmark landmark-two">GARDEN DISTRICT</div>
-            <div className="park park-one" />
-            <div className="park park-two" />
-            <div className="river" />
-            {visibleSpots.map((spot) => (
-              <Stamp key={spot.id} spot={spot} active={selected === spot.id} onClick={() => setSelected(spot.id)} />
-            ))}
-            <div className="you-are-here"><span /> YOU ARE HERE</div>
-            {visibleSpots.length === 0 && <p className="no-results">No stamps here yet.</p>}
-            <div className="map-card">
+          <section
+            className={`map-view ${mapDrag.current ? "is-dragging" : ""}`}
+            // [google-maps] drag/zoom handlers only drive the hand-drawn fallback map
+            {...(fakeMap && {
+              onPointerDown: startMapDrag,
+              onPointerMove: moveMap,
+              onPointerUp: () => { mapDrag.current = null; },
+              onPointerCancel: () => { mapDrag.current = null; },
+              onWheel: (event: React.WheelEvent<HTMLElement>) => {
+                event.preventDefault();
+                changeZoom(event.deltaY > 0 ? -.12 : .12);
+              },
+            })}
+            onTouchStart={(event) => event.stopPropagation()}
+            onTouchEnd={(event) => event.stopPropagation()}
+          >
+            {/* [google-maps] start: real Google Map; original hand-drawn map is the fallback */}
+            <StudyMap
+              spots={visibleSpots}
+              selectedId={selected}
+              onSelect={setSelected}
+              onFallback={() => setFakeMap(true)}
+              onPlacesLoaded={(results) => {
+                const resultIds = new Set(results.map((place) => place.id));
+                setAllSpots((current) => [
+                  ...results,
+                  // drop the hardcoded samples, keep spots the user added themselves
+                  ...current.filter((spot) => !resultIds.has(spot.id) && !spots.some((sample) => sample.id === spot.id)),
+                ]);
+                setSelected(results[0].id);
+              }}
+              renderPin={(spot) => (
+                <Stamp
+                  spot={spot}
+                  active={selected === spot.id}
+                  stamped={stampedSpots.includes(spot.id)}
+                  onClick={() => setSelected(spot.id)}
+                  onSave={() => {
+                    const place = placeDirectory.find((item) => item.name === spot.name) ?? {
+                      name: spot.name,
+                      address: spot.address,
+                      area: spot.area,
+                      type: spot.type,
+                      position: spot.position,
+                      hours: spot.hours,
+                      openEarly: spot.openEarly,
+                      openLate: spot.openLate,
+                    };
+                    setSelected(spot.id);
+                    setSelectedPlace(place);
+                    setPlaceQuery(place.name);
+                    setSheetMode("stamp");
+                    setAddOpen(true);
+                  }}
+                />
+              )}
+              fallback={<>
+            <div
+              className="map-canvas"
+              style={{ transform: `translate(${mapView.x}px, ${mapView.y}px) scale(${mapView.scale})` }}
+            >
+              <div className="map-landmark landmark-one">OLD TOWN</div>
+              <div className="map-landmark landmark-two">GARDEN DISTRICT</div>
+              <div className="park park-one" />
+              <div className="park park-two" />
+              <div className="river" />
+              {visibleSpots.map((spot) => (
+                <Stamp
+                  key={spot.id}
+                  spot={spot}
+                  active={selected === spot.id}
+                  stamped={stampedSpots.includes(spot.id)}
+                  onClick={() => setSelected(spot.id)}
+                  onSave={() => {
+                    const place = placeDirectory.find((item) => item.name === spot.name) ?? {
+                      name: spot.name,
+                      address: spot.address,
+                      area: spot.area,
+                      type: spot.type,
+                      position: spot.position,
+                      hours: spot.hours,
+                      openEarly: spot.openEarly,
+                      openLate: spot.openLate,
+                    };
+                    setSelected(spot.id);
+                    setSelectedPlace(place);
+                    setPlaceQuery(place.name);
+                    setSheetMode("stamp");
+                    setAddOpen(true);
+                  }}
+                />
+              ))}
+              <div className="you-are-here"><span /> YOU ARE HERE</div>
+              {visibleSpots.length === 0 && <p className="no-results">No stamps here yet.</p>}
+            </div>
+            <div className="map-controls" aria-label="Map controls">
+              <button onClick={() => changeZoom(.2)} aria-label="Zoom in">+</button>
+              <button onClick={() => changeZoom(-.2)} aria-label="Zoom out">−</button>
+              <button
+                className="recenter-map"
+                onClick={() => setMapView({ x: 0, y: 0, scale: 1 })}
+                aria-label="Recenter map"
+              >
+                ◎
+              </button>
+            </div>
+              </>}
+            />
+            {/* [google-maps] end */}
+            <div className="map-gesture-hint">drag to wander · scroll to zoom</div>
+            <div
+              className="map-card"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                cardDrag.current = event.clientY;
+              }}
+              onPointerUp={(event) => {
+                event.stopPropagation();
+                if (cardDrag.current !== null && cardDrag.current - event.clientY > 35) setDetailsOpen(true);
+                cardDrag.current = null;
+              }}
+            >
+              <div className="map-card-pull"><span /> pull up</div>
               <div className="mini-photo">
                 <img src={selectedSpot.image} alt="" />
               </div>
               <div className="map-card-copy">
                 <p className="eyebrow">{selectedSpot.area} · {selectedSpot.walk}</p>
                 <h2>{selectedSpot.name}</h2>
+                <p className="spot-address">{selectedSpot.address}</p>
                 <div className="map-rating">
                   <b>★ {selectedSpot.rating}</b>
                   <span>{selectedSpot.reviews} ratings</span>
                   <i>{selectedSpot.highlights[0]}</i>
                 </div>
                 <p>{selectedSpot.note}</p>
+                <button className="map-details-button" onClick={() => setDetailsOpen(true)}>
+                  See study report <span>↗</span>
+                </button>
               </div>
-              <button
-                className={`heart-button ${favorites.includes(selectedSpot.id) ? "is-favorite" : ""}`}
-                onClick={() => toggleFavorite(selectedSpot.id)}
-                aria-label="Toggle favorite"
-              >
-                <Icon name="heart" size={20} />
-              </button>
+              <div className="map-place-actions">
+                {stampedSpots.includes(selectedSpot.id) ? (
+                  <>
+                    <span className="mini-visited" title="You saved this spot">SAVED!</span>
+                    <button
+                      className={`heart-button ${favorites.includes(selectedSpot.id) ? "is-favorite" : ""}`}
+                      onClick={() => toggleFavorite(selectedSpot.id)}
+                      aria-label="Toggle favorite"
+                    >
+                      <Icon name="heart" size={20} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="mini-stamp-button"
+                    onClick={() => {
+                      const place = placeDirectory.find((item) => item.name === selectedSpot.name);
+                      if (place) {
+                        setSelectedPlace(place);
+                        setPlaceQuery(place.name);
+                      }
+                      setSheetMode("stamp");
+                      setAddOpen(true);
+                    }}
+                    aria-label={`Save ${selectedSpot.name}`}
+                  >
+                    <span>SAVE!</span>
+                  </button>
+                )}
+              </div>
             </div>
           </section>
         ) : (
@@ -636,8 +1578,18 @@ export default function App() {
               <SpotCard
                 key={spot.id}
                 spot={spot}
+                stamped={stampedSpots.includes(spot.id)}
                 favorite={favorites.includes(spot.id)}
                 onFavorite={() => toggleFavorite(spot.id)}
+                onStamp={() => {
+                  const place = placeDirectory.find((item) => item.name === spot.name);
+                  if (place) {
+                    setSelectedPlace(place);
+                    setPlaceQuery(place.name);
+                  }
+                  setSheetMode("stamp");
+                  setAddOpen(true);
+                }}
               />
             ))}
             {visibleSpots.length === 0 && <p className="empty-list">Nothing found — try another stamp.</p>}
@@ -648,13 +1600,14 @@ export default function App() {
           <span className="peek-faces">
             {friends.slice(1, 4).map((friend) => <img key={friend.id} src={friend.image} alt="" />)}
           </span>
-          <span>friends<br /><b>activity</b></span>
+          <span>study<br /><b>log</b></span>
           <strong>›</strong>
         </button>
           </>
         ) : (
           <FriendActivity
             activities={activities}
+            leaderboardHours={leaderboardHours}
             selectedFriend={selectedFriend}
             setSelectedFriend={setSelectedFriend}
             logOpen={logOpen}
@@ -664,7 +1617,16 @@ export default function App() {
           />
         )}
 
-        <button className="add-button" onClick={() => setAddOpen(true)} aria-label="Add a new study spot">
+        <button
+          className="add-button"
+          onClick={() => {
+            setSheetMode("stamp");
+            setSelectedPlace(null);
+            setPlaceQuery("");
+            setAddOpen(true);
+          }}
+          aria-label="Add a new study spot"
+        >
           <Icon name="plus" size={25} />
         </button>
 
@@ -679,6 +1641,104 @@ export default function App() {
           </button>
         </nav>
 
+        {chatOpen && (
+          <AskHopsChat
+            spots={allSpots}
+            stampedSpots={stampedSpots}
+            onClose={() => setChatOpen(false)}
+            onViewSpot={(spot) => {
+              setSelected(spot.id);
+              setChatOpen(false);
+              setDetailsOpen(true);
+            }}
+            onSaveSpot={(spot) => {
+              const place = placeDirectory.find((item) => item.name === spot.name) ?? {
+                name: spot.name,
+                address: spot.address,
+                area: spot.area,
+                type: spot.type,
+                position: spot.position,
+                hours: spot.hours,
+                openEarly: spot.openEarly,
+                openLate: spot.openLate,
+              };
+              setSelected(spot.id);
+              setSelectedPlace(place);
+              setPlaceQuery(place.name);
+              setSheetMode("stamp");
+              setChatOpen(false);
+              setAddOpen(true);
+            }}
+          />
+        )}
+
+        {receiptData && (
+          <div className="stamp-celebration" onMouseDown={() => setReceiptData(null)}>
+            <div className="receipt-stage" onMouseDown={(event) => event.stopPropagation()}>
+              <div className="stamp-strike" aria-hidden="true">
+                <span>STUDY SPOT</span>
+                <strong>SAVED!</strong>
+              </div>
+              <article className="spot-receipt">
+                <div className="receipt-teeth" />
+                <p className="receipt-kicker">✦ VISIT RECEIPT ✦</p>
+                <div className="receipt-place">
+                  <span><Icon name={receiptData.type} size={24} /></span>
+                  <div><h2>{receiptData.name}</h2><p>{receiptData.address}</p></div>
+                </div>
+                <div className="receipt-rule" />
+                <dl>
+                  <div><dt>Neighborhood</dt><dd>{receiptData.area}</dd></div>
+                  <div><dt>Hours</dt><dd>{receiptData.hours}</dd></div>
+                  <div><dt>Your rating</dt><dd>{"★".repeat(receiptData.rating)}</dd></div>
+                  <div><dt>Stamped</dt><dd>{new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}</dd></div>
+                </dl>
+                <div className="receipt-dots">• • • • • • • • • •</div>
+                <p className="receipt-thanks">A new stop in your study story.</p>
+                <div className="receipt-code">|||| ||| || |||| | |||</div>
+              </article>
+              <button className="receipt-done" onClick={() => setReceiptData(null)}>Tuck it away</button>
+            </div>
+          </div>
+        )}
+
+        {detailsOpen && (
+          <PlaceDetailSheet
+            spot={selectedSpot}
+            stamped={stampedSpots.includes(selectedSpot.id)}
+            favorite={favorites.includes(selectedSpot.id)}
+            onFavorite={() => toggleFavorite(selectedSpot.id)}
+            onStamp={() => {
+              const place = placeDirectory.find((item) => item.name === selectedSpot.name);
+              if (place) {
+                setSelectedPlace(place);
+                setPlaceQuery(place.name);
+              }
+              setSheetMode("stamp");
+              setDetailsOpen(false);
+              setAddOpen(true);
+            }}
+            onClose={() => setDetailsOpen(false)}
+            onRate={() => {
+              const place = placeDirectory.find((item) => item.name === selectedSpot.name) ?? {
+                name: selectedSpot.name,
+                address: selectedSpot.address,
+                area: selectedSpot.area,
+                type: selectedSpot.type,
+                position: selectedSpot.position,
+                hours: selectedSpot.hours,
+                openEarly: selectedSpot.openEarly,
+                openLate: selectedSpot.openLate,
+              };
+              setSelectedPlace(place);
+              setPlaceQuery(place.name);
+              setSheetMode("rate");
+              setDetailsOpen(false);
+              setAddOpen(true);
+            }}
+          />
+        )}
+
         {addOpen && (
           <div className="sheet-backdrop" onMouseDown={() => setAddOpen(false)}>
             <section className="add-sheet" onMouseDown={(event) => event.stopPropagation()}>
@@ -686,44 +1746,199 @@ export default function App() {
               <button className="sheet-close" onClick={() => setAddOpen(false)} aria-label="Close">
                 <Icon name="close" size={20} />
               </button>
-              <p className="kicker">A NEW FAVORITE?</p>
-              <h2>Stamp a spot</h2>
-              <p className="sheet-intro">Save a nook worth coming back to.</p>
+              <p className="kicker">{sheetMode === "rate" ? "SHARE YOUR TAKE" : "A NEW FAVORITE?"}</p>
+              <h2>{sheetMode === "rate" ? "Rate this spot" : "Stamp a spot"}</h2>
+              <p className="sheet-intro">
+                {sheetMode === "rate" ? "Add a rating without marking this place visited." : "Find the place, then leave your stamp."}
+              </p>
               <form onSubmit={saveNewSpot}>
-                <label>
-                  Spot name
-                  <input required name="name" placeholder="e.g. Corner Cup" />
-                </label>
-                <label>
-                  Neighborhood
-                  <input required name="area" placeholder="Where is it?" />
-                </label>
+                {sheetMode === "stamp" ? (
+                <div className={`place-lookup ${placeError ? "has-error" : ""}`}>
+                  <label>
+                    Find a store or study spot <span>required</span>
+                    <div className="place-search-input">
+                      <Icon name="search" size={18} />
+                      <input
+                        autoComplete="off"
+                        value={placeQuery}
+                        onChange={(event) => {
+                          setPlaceQuery(event.target.value);
+                          setSelectedPlace(null);
+                          setPlaceError(false);
+                        }}
+                        placeholder="Start typing a place name..."
+                      />
+                    </div>
+                  </label>
+                  {placeSuggestions.length > 0 && (
+                    <div className="place-suggestions">
+                      {placeSuggestions.map((place) => (
+                        <button
+                          type="button"
+                          key={`${place.name}-${place.address}`}
+                          onClick={() => {
+                            setSelectedPlace(place);
+                            setPlaceQuery(place.name);
+                            setPlaceError(false);
+                          }}
+                        >
+                          <span className="suggestion-icon"><Icon name={place.type} size={19} /></span>
+                          <span><b>{place.name}</b><small>{place.address} · {place.area}</small></span>
+                          <strong>›</strong>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {selectedPlace && (
+                    <div className="selected-place">
+                      <span><Icon name={selectedPlace.type} size={24} /></span>
+                      <div>
+                        <b>{selectedPlace.name}</b>
+                        <p>{selectedPlace.address}</p>
+                        <small>{selectedPlace.area} · {selectedPlace.hours}</small>
+                      </div>
+                      <em>✓</em>
+                    </div>
+                  )}
+                  {placeError && <p className="place-error">Choose a place from the search results first.</p>}
+                </div>
+                ) : selectedPlace ? (
+                  <div className="rating-place-summary">
+                    <span><Icon name={selectedPlace.type} size={23} /></span>
+                    <div><b>{selectedPlace.name}</b><small>{selectedPlace.address}</small></div>
+                  </div>
+                ) : null}
+                {sheetMode === "stamp" && (
                 <label>
                   Tiny note
                   <textarea name="note" placeholder="Sunny tables, strong coffee..." />
                 </label>
-                <fieldset className="study-ratings">
-                  <legend>
-                    <span className="rating-stamp">RATE IT</span>
-                    <span><b>Study spot report</b><small>Tap the stamps that fit</small></span>
-                  </legend>
-                  {ratingCategories.map((category) => (
-                    <RatingScale
-                      key={category.key}
-                      label={category.label}
-                      low={category.low}
-                      high={category.high}
-                      value={newSpotRatings[category.key]}
-                      onChange={(value) => setNewSpotRatings((ratings) => ({ ...ratings, [category.key]: value }))}
-                    />
-                  ))}
-                  <label className="exact-hours">
-                    Usual store hours
-                    <input name="storeHours" placeholder="e.g. Mon–Fri · 7am–9pm" />
-                  </label>
+                )}
+                <fieldset className={`overall-rating ${ratingError ? "has-error" : ""}`}>
+                  <legend>Overall rating <span>required</span></legend>
+                  <p>How study-friendly was this spot?</p>
+                  <div className="overall-stars" role="radiogroup" aria-label="Overall rating">
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={generalRating === score}
+                        key={score}
+                        className={score <= generalRating ? "filled" : ""}
+                        onClick={() => { setGeneralRating(score); setRatingError(false); }}
+                        aria-label={`${score} star${score > 1 ? "s" : ""}`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  <small>{ratingError ? "Please stamp a star rating first." : generalRating ? `${generalRating} out of 5 — noted!` : "Tap a star to rate"}</small>
                 </fieldset>
+
+                <button
+                  type="button"
+                  className={`leave-review ${reviewOpen ? "open" : ""}`}
+                  onClick={() => setReviewOpen((open) => !open)}
+                  aria-expanded={reviewOpen}
+                >
+                  <span className="rating-stamp">REVIEW</span>
+                  <span><b>{reviewOpen ? "Hide detailed review" : "Leave a review"}</b><small>Optional · add the study details</small></span>
+                  <strong>{reviewOpen ? "−" : "+"}</strong>
+                </button>
+
+                {reviewOpen && (
+                  <fieldset className="study-ratings">
+                    <legend>
+                      <span><b>Study spot report</b><small>Help other hoppers find their spot</small></span>
+                    </legend>
+                    <ChoiceMetric
+                      label="Noise level"
+                      options={["quiet", "chatter", "loud"]}
+                      value={reviewDetails.noise}
+                      onChange={(noise) => setReviewDetails((details) => ({ ...details, noise }))}
+                    />
+                    <ChoiceMetric
+                      label="Abundance of outlets"
+                      options={["every table", "a few tables", "no tables"]}
+                      value={reviewDetails.outlets}
+                      onChange={(outlets) => setReviewDetails((details) => ({ ...details, outlets }))}
+                    />
+                    <label className="seat-slider">
+                      <span><b>Seating space</b><output>{reviewDetails.seats} people / table</output></span>
+                      <input
+                        type="range"
+                        min="1"
+                        max="12"
+                        value={reviewDetails.seats}
+                        onChange={(event) => setReviewDetails((details) => ({ ...details, seats: Number(event.target.value) }))}
+                      />
+                      <small><span>solo nook</span><span>big group</span></small>
+                    </label>
+                    <div className="busyness-input">
+                      <div>
+                        <b>Busyness by time</b>
+                        <select
+                          value={reviewDetails.busyDay}
+                          onChange={(event) => setReviewDetails((details) => ({ ...details, busyDay: event.target.value }))}
+                          aria-label="Day type"
+                        >
+                          <option>Weekdays</option>
+                          <option>Weekends</option>
+                        </select>
+                      </div>
+                      {["8am", "12pm", "4pm", "8pm"].map((time, index) => (
+                        <label key={time}>
+                          <span>{time}</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={reviewDetails.busyness[index]}
+                            onChange={(event) => setReviewDetails((details) => {
+                              const busyness = [...details.busyness];
+                              busyness[index] = Number(event.target.value);
+                              return { ...details, busyness };
+                            })}
+                          />
+                          <output>
+                            {reviewDetails.busyness[index] < 34 ? "calm" : reviewDetails.busyness[index] < 67 ? "steady" : "busy"}
+                          </output>
+                        </label>
+                      ))}
+                    </div>
+                    <ChoiceMetric
+                      label="Food & goods price"
+                      options={["$", "$$", "$$$", "$$$$"]}
+                      value={reviewDetails.price}
+                      onChange={(price) => setReviewDetails((details) => ({ ...details, price }))}
+                    />
+                    <ChoiceMetric
+                      label="Wi-fi speed / strength"
+                      options={["slow", "medium", "fast"]}
+                      value={reviewDetails.wifi}
+                      onChange={(wifi) => setReviewDetails((details) => ({ ...details, wifi }))}
+                    />
+                    <label className="vibe-response">
+                      <span><b>Da vibes!</b><small>What are people saying?</small></span>
+                      <div><em>cozy</em><em>focused</em><em>sunny</em><em>friendly</em></div>
+                      <textarea name="vibes" placeholder="Add your own take on the atmosphere..." />
+                    </label>
+                    <div className="maps-insight hours-insight">
+                      <div><b>Hours</b><span>Map data</span></div>
+                      <p><strong>Today</strong> · 7am–10pm</p>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={reviewDetails.openLate}
+                          onChange={(event) => setReviewDetails((details) => ({ ...details, openLate: event.target.checked }))}
+                        />
+                        Open at night, past 9pm
+                      </label>
+                    </div>
+                  </fieldset>
+                )}
                 <button type="submit" className="stamp-submit">
-                  {savedMessage || "Press to save"}
+                  {savedMessage || (sheetMode === "rate" ? "Submit rating" : "Press to save")}
                 </button>
               </form>
             </section>

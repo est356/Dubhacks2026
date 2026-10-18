@@ -1,8 +1,10 @@
 {
-  "title": "Study Spots",
-  "description": "Find a study nook and see what your friends are working on.",
-  "language": "en",
+  "description": "Discover and track your favorite cafes and study spots with a whimsical, hand-drawn interface, making list-making and location sharing enjoyable.",
   "robots": {
-    "index": true
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
   }
 }
