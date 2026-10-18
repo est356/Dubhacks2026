@@ -1964,6 +1964,7 @@ h1 {
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow: auto;
   background: rgba(49,57,48,.52);
   backdrop-filter: blur(4px);
 }
@@ -2017,6 +2018,37 @@ h1 {
     linear-gradient(45deg, #fbf8ef 6px, transparent 0) 0 0,
     linear-gradient(-45deg, #fbf8ef 6px, transparent 0) 0 0;
   background-size: 12px 8px;
+}
+
+.receipt-hello {
+  margin: 0 0 2px;
+  color: #c94f45;
+  text-align: center;
+  font: 700 30px/1 "Gaegu", cursive;
+  letter-spacing: .01em;
+  transform: rotate(-2.5deg);
+}
+
+.receipt-hello::before,
+.receipt-hello::after {
+  color: #e7a3b6;
+  font-size: .62em;
+  vertical-align: 4px;
+}
+
+.receipt-hello::before {
+  content: "♡ ";
+}
+
+.receipt-hello::after {
+  content: " ♡";
+}
+
+.receipt-bunny {
+  display: block;
+  width: 148px;
+  height: auto;
+  margin: -4px auto 2px;
 }
 
 .receipt-kicker {
