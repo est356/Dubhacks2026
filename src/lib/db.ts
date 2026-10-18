@@ -74,7 +74,7 @@ export function communityHighlights(row: DbSpot): string[] {
   return labels.filter((value): value is string => Boolean(value));
 }
 
-function toSpot(row: DbSpot): CommunitySpot {
+export function toSpot(row: DbSpot): CommunitySpot {
   const location = { lat: row.latitude, lng: row.longitude };
   const isLibrary = /librar|reading room/i.test(`${row.name} ${(row.tags ?? []).join(" ")}`);
   const type: PlaceSpot["type"] = isLibrary ? "library" : "coffee";

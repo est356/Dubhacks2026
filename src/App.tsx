@@ -10,6 +10,9 @@ import {
 import type { PlaceSpot } from "./lib/places";
 import DisplayNamePrompt from "./components/DisplayNamePrompt";
 import CommunityLeaderboard from "./components/CommunityLeaderboard";
+// [hops-gemini] Hops chat talks to Gemini via the Supabase Edge Function "hops-chat"
+import { askHops } from "./lib/hopsChat";
+import { toSpot, type DbSpot } from "./lib/db";
 
 type Spot = {
   id: number;
@@ -918,7 +921,23 @@ type ChatMessage = {
   from: "hop" | "user";
   text: string;
   spotId?: number;
+  // [hops-gemini] spots Gemini recommended (validated public.spots rows from the hops-chat function)
+  hopsSpots?: DbSpot[];
 };
+
+// [hops-gemini] start: match a recommended spot row to the app's merged spots (Supabase id → place_id → name)
+// so the card gets the Google Places photo + walk time; otherwise build one from the row (stock image).
+function resolveHopsSpot(row: DbSpot, spots: Spot[]): Spot {
+  const remote = spots as (Spot & { dbId?: string; placeId?: string })[];
+  const name = row.name.trim().toLowerCase();
+  return (
+    remote.find((spot) => spot.dbId === row.id) ??
+    (row.place_id ? remote.find((spot) => spot.placeId === row.place_id) : undefined) ??
+    remote.find((spot) => spot.name.trim().toLowerCase() === name) ??
+    (toSpot(row) as Spot)
+  );
+}
+// [hops-gemini] end
 
 function AskHopsChat({
   spots,
@@ -956,27 +975,36 @@ function AskHopsChat({
     return spots.find((spot) => spot.type === "coffee") ?? spots[0];
   }
 
+  // [hops-gemini] start: send the whole conversation to Gemini instead of the old keyword matcher (findMatch)
   function sendMessage(text: string) {
     const trimmed = text.trim();
     if (!trimmed || isTyping) return;
-    const match = findMatch(trimmed);
-    setMessages((current) => [...current, { id: Date.now(), from: "user", text: trimmed }]);
+    const userMessage: ChatMessage = { id: Date.now(), from: "user", text: trimmed };
+    const history = [...messages, userMessage];
+    setMessages(history);
     setInput("");
     setIsTyping(true);
-    window.setTimeout(() => {
-      const profile = getStudyProfile(match);
-      setMessages((current) => [
-        ...current,
-        {
-          id: Date.now() + 1,
-          from: "hop",
-          text: `I think ${match.name} fits! It’s ${profile.noise}, has ${profile.outlets}, and the Wi-fi is ${profile.wifi}.`,
-          spotId: match.id,
-        },
-      ]);
-      setIsTyping(false);
-    }, 550);
+    askHops(history.map((message) => ({ role: message.from === "hop" ? "model" : "user", text: message.text })))
+      .then(({ reply, spots: hopsSpots }) => {
+        // Secondary fallback: if no structured picks came back, show the card for a spot the reply names (longest name wins).
+        const mentioned = hopsSpots.length
+          ? undefined
+          : [...spots]
+              .sort((a, b) => b.name.length - a.name.length)
+              .find((spot) => reply.toLowerCase().includes(spot.name.toLowerCase()));
+        setMessages((current) => [
+          ...current,
+          { id: Date.now() + 1, from: "hop", text: reply, spotId: mentioned?.id, hopsSpots },
+        ]);
+      })
+      .catch((error: unknown) => {
+        console.warn("[hops-gemini] chat failed:", error);
+        const friendly = error instanceof Error && error.message ? error.message : "Hops hopped into a hiccup. Try again in a moment!";
+        setMessages((current) => [...current, { id: Date.now() + 1, from: "hop", text: friendly }]);
+      })
+      .finally(() => setIsTyping(false));
   }
+  // [hops-gemini] end
 
   function submitMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1001,15 +1029,22 @@ function AskHopsChat({
 
         <div className="chat-messages">
           {messages.map((message) => {
-            const recommendation = message.spotId ? spots.find((spot) => spot.id === message.spotId) : null;
-            const profile = recommendation ? getStudyProfile(recommendation) : null;
+            // [hops-gemini] one card per recommended spot (structured picks first, else the exact-name match)
+            const legacy = message.spotId ? spots.find((spot) => spot.id === message.spotId) : undefined;
+            const recommendations = message.hopsSpots?.length
+              ? message.hopsSpots.map((row) => resolveHopsSpot(row, spots))
+              : legacy
+                ? [legacy]
+                : [];
             return (
               <div className={`chat-message-row ${message.from}`} key={message.id}>
                 {message.from === "hop" && <img src="/bunny_mascot.png" alt="Hops" />}
                 <div>
                   <p>{message.text}</p>
-                  {recommendation && profile && (
-                    <article className="chat-recommendation">
+                  {recommendations.map((recommendation) => {
+                    const profile = getStudyProfile(recommendation);
+                    return (
+                    <article className="chat-recommendation" key={recommendation.id}>
                       <div className="chat-rec-photo">
                         <img src={recommendation.image} alt={`${recommendation.name} interior`} />
                         <span>{recommendation.walk}</span>
@@ -1023,7 +1058,7 @@ function AskHopsChat({
                         <strong>★ {recommendation.rating} · {recommendation.reviews}</strong>
                         <div className="chat-rec-stats">
                           <span>{profile.noise}</span>
-                          <span>{profile.wifi} wi-fi</span>
+                          <span>{profile.wifi.replace(/\s*wi-?fi$/i, "")} wi-fi</span>
                           <span>{recommendation.hours}</span>
                         </div>
                         <div className="chat-rec-actions">
@@ -1037,7 +1072,8 @@ function AskHopsChat({
                         </div>
                       </div>
                     </article>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
             );
