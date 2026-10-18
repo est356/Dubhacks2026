@@ -1,6 +1,15 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // [google-maps] real map + Places search live in their own files (not Figma-generated)
 import StudyMap, { hasGoogleMapsKey } from "./components/StudyMap";
+// [supabase] guest auth + community data live in their own files (not Figma-generated)
+import { useGuestAuth } from "./lib/auth";
+import {
+  addRankedCafe, addRating, fetchSpots, getLeaderboard, logStudySession, mergeSpots, reviewToNumbers,
+  type CommunitySpot, type LeaderboardRow,
+} from "./lib/db";
+import type { PlaceSpot } from "./lib/places";
+import DisplayNamePrompt from "./components/DisplayNamePrompt";
+import CommunityLeaderboard from "./components/CommunityLeaderboard";
 
 type Spot = {
   id: number;
@@ -522,7 +531,11 @@ function FriendActivity({
   setLogOpen,
   onLog,
   onBack,
+  spotOptions,
+  extra,
 }: {
+  spotOptions?: string[]; // [supabase] real spot names for the log form
+  extra?: React.ReactNode; // [supabase] community leaderboard
   activities: Activity[];
   leaderboardHours: Record<number, number>;
   selectedFriend: number | null;
@@ -569,7 +582,7 @@ function FriendActivity({
           <label>
             <span>Spot</span>
             <select name="place" defaultValue="Moss & Mugs">
-              {spots.map((spot) => <option key={spot.id}>{spot.name}</option>)}
+              {(spotOptions ?? spots.map((spot) => spot.name)).map((name) => <option key={name}>{name}</option>)}
             </select>
           </label>
           <label className="log-subject">
@@ -657,6 +670,7 @@ function FriendActivity({
           </div>
           <p className="leaderboard-note">Log a session and watch your bar hop forward.</p>
         </section>
+        {extra}
 
         <section className="feed-section">
           <div className="section-title">
@@ -1122,6 +1136,83 @@ export default function App() {
   const [fakeMap, setFakeMap] = useState(!hasGoogleMapsKey);
   const mapDrag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const cardDrag = useRef<number | null>(null);
+  // [supabase] start: guest sign-in, community spots, leaderboard, display-name prompt
+  const auth = useGuestAuth();
+  const [placesSpots, setPlacesSpots] = useState<PlaceSpot[]>([]);
+  const [communitySpots, setCommunitySpots] = useState<CommunitySpot[]>([]);
+  const [leaderboardRows, setLeaderboardRows] = useState<LeaderboardRow[]>([]);
+  const [syncNotice, setSyncNotice] = useState("");
+  const [pendingNameAction, setPendingNameAction] = useState<null | (() => void)>(null);
+  const refreshCommunity = useCallback(() => {
+    fetchSpots()
+      .then(setCommunitySpots)
+      .catch((error) => {
+        console.warn("[supabase] fetchSpots failed:", error);
+        setSyncNotice("Couldn't load community spots — showing local data.");
+      });
+    getLeaderboard(10).then(setLeaderboardRows).catch((error) => console.warn("[supabase] leaderboard failed:", error));
+  }, []);
+  useEffect(() => {
+    if (auth.status === "ready") refreshCommunity();
+    if (auth.status === "unavailable" && auth.reason) setSyncNotice(auth.reason);
+  }, [auth.status, auth.reason, refreshCommunity]);
+  useEffect(() => {
+    // Places + Supabase replace the hardcoded samples; spots the user added locally are kept.
+    if (!placesSpots.length && !communitySpots.length) return;
+    const merged = mergeSpots(placesSpots, communitySpots);
+    setAllSpots((current) => [
+      ...merged,
+      ...current.filter((spot) => {
+        const remote = spot as Partial<PlaceSpot>;
+        return !remote.placeId && !remote.dbId && !spots.some((sample) => sample.id === spot.id);
+      }),
+    ]);
+  }, [placesSpots, communitySpots]);
+  useEffect(() => {
+    if (allSpots.length && !allSpots.some((spot) => spot.id === selected)) setSelected(allSpots[0].id);
+  }, [allSpots, selected]);
+  useEffect(() => {
+    if (!syncNotice) return;
+    const timer = window.setTimeout(() => setSyncNotice(""), 7000);
+    return () => window.clearTimeout(timer);
+  }, [syncNotice]);
+  function syncToSupabase(task: () => Promise<unknown>) {
+    if (auth.status !== "ready") return; // offline / guest sign-in off: local-only, notice already shown
+    const run = () =>
+      task()
+        .then(refreshCommunity)
+        .catch((error) => {
+          console.warn("[supabase] write failed:", error);
+          setSyncNotice("Saved on this device, but couldn't sync to Study Hopper.");
+        });
+    if (auth.displayName || window.localStorage.getItem("study-hopper-name-skipped")) run();
+    else setPendingNameAction(() => run); // first rating/log: ask for a display name first
+  }
+  function syncRating(target: Spot | undefined, note: string) {
+    if (auth.status !== "ready") return;
+    const remote = (target ?? {}) as Partial<PlaceSpot>;
+    const score = generalRating;
+    const review = reviewOpen ? reviewToNumbers(reviewDetails) : {};
+    if (remote.dbId) {
+      syncToSupabase(() => addRating(remote.dbId!, score, review, note));
+    } else if (target && remote.placeId && remote.location) {
+      const location = remote.location;
+      const placeId = remote.placeId;
+      syncToSupabase(() =>
+        addRankedCafe({
+          name: target.name, location, placeId, score, review, note,
+          address: target.address, hours: target.hours,
+          openLate: reviewOpen ? reviewDetails.openLate : target.openLate,
+          seating: reviewOpen ? reviewDetails.seats : null,
+          price: reviewOpen ? reviewDetails.price : null,
+          tags: target.tags,
+        }),
+      );
+    } else {
+      setSyncNotice("Saved on this device — pick a spot from the map to share it with the community.");
+    }
+  }
+  // [supabase] end
   const touchStart = useRef<number | null>(null);
 
   const placeSuggestions = useMemo(() => {
@@ -1166,6 +1257,7 @@ export default function App() {
     const form = new FormData(event.currentTarget);
     const name = selectedPlace.name;
     const existing = allSpots.find((spot) => spot.name === selectedPlace.name);
+    syncRating(existing, String(form.get("note") || "")); // [supabase]
     if (existing) {
       setSelected(existing.id);
       if (sheetMode === "stamp") {
@@ -1274,6 +1366,11 @@ export default function App() {
   function logActivity(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    // [supabase] also log to the community leaderboard
+    const loggedSpot = allSpots.find((spot) => spot.name === String(form.get("place") || "")) as Partial<PlaceSpot> | undefined;
+    syncToSupabase(() =>
+      logStudySession(Number(form.get("hours") || 1), loggedSpot?.dbId, String(form.get("subject") || "")),
+    );
     setActivities((current) => [
       {
         id: Date.now(),
@@ -1415,12 +1512,7 @@ export default function App() {
               onSelect={setSelected}
               onFallback={() => setFakeMap(true)}
               onPlacesLoaded={(results) => {
-                const resultIds = new Set(results.map((place) => place.id));
-                setAllSpots((current) => [
-                  ...results,
-                  // drop the hardcoded samples, keep spots the user added themselves
-                  ...current.filter((spot) => !resultIds.has(spot.id) && !spots.some((sample) => sample.id === spot.id)),
-                ]);
+                setPlacesSpots(results); // [supabase] merged with community spots in an effect above
                 setSelected(results[0].id);
               }}
               renderPin={(spot) => (
@@ -1614,6 +1706,8 @@ export default function App() {
             setLogOpen={setLogOpen}
             onLog={logActivity}
             onBack={() => setPage("places")}
+            spotOptions={allSpots.map((spot) => spot.name)} // [supabase]
+            extra={auth.status === "ready" && <CommunityLeaderboard rows={leaderboardRows} youId={auth.user?.id} />}
           />
         )}
 
@@ -1944,6 +2038,31 @@ export default function App() {
             </section>
           </div>
         )}
+        {/* [supabase] start */}
+        {pendingNameAction && (
+          <DisplayNamePrompt
+            onSave={async (name) => {
+              const ok = await auth.setDisplayName(name);
+              if (ok) {
+                pendingNameAction();
+                setPendingNameAction(null);
+              }
+              return ok;
+            }}
+            onSkip={() => {
+              window.localStorage.setItem("study-hopper-name-skipped", "1");
+              pendingNameAction();
+              setPendingNameAction(null);
+            }}
+          />
+        )}
+        {syncNotice && (
+          <p className="supabase-notice" role="status">
+            {syncNotice}
+            <button type="button" onClick={() => setSyncNotice("")}>ok</button>
+          </p>
+        )}
+        {/* [supabase] end */}
       </section>
     </main>
   );

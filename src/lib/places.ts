@@ -24,9 +24,14 @@ export type PlaceSpot = {
   address: string;
   /** Real coordinates (Places results). Sample spots without this get placed near the map center. */
   location?: LatLng;
-  /** Google Place id, present only for Places results. */
+  /** Google Place id (Places results, and Supabase spots that have one). */
   placeId?: string;
+  /** Supabase spots.id uuid, when this spot exists in the community database. */
+  dbId?: string;
 };
+
+/** University of Washington, Seattle. */
+export const DEFAULT_CENTER_LATLNG: LatLng = { lat: 47.6553, lng: -122.3035 };
 
 const FALLBACK_IMAGES = {
   coffee:
