@@ -4,12 +4,11 @@ import StudyMap, { hasGoogleMapsKey } from "./components/StudyMap";
 // [supabase] guest auth + community data live in their own files (not Figma-generated)
 import { useGuestAuth } from "./lib/auth";
 import {
-  addRankedCafe, addRating, fetchSpots, getLeaderboard, logStudySession, mergeSpots, reviewToNumbers,
-  type CommunitySpot, type LeaderboardRow,
+  addRankedCafe, addRating, fetchSpots, logStudySession, mergeSpots, reviewToNumbers,
+  type CommunitySpot,
 } from "./lib/db";
 import type { PlaceSpot } from "./lib/places";
 import DisplayNamePrompt from "./components/DisplayNamePrompt";
-import CommunityLeaderboard from "./components/CommunityLeaderboard";
 // [hops-gemini] Hops chat talks to Gemini via the Supabase Edge Function "hops-chat"
 import { askHops } from "./lib/hopsChat";
 import { toSpot, type DbSpot } from "./lib/db";
@@ -319,6 +318,8 @@ const starterActivities: Activity[] = [
   { id: 1, friendId: 2, hours: "2.5", place: "Moss & Mugs", subject: "Biology notes", when: "18 min ago" },
   { id: 2, friendId: 3, hours: "1.5", place: "The Reading Room", subject: "Drafting an essay", when: "2 hrs ago" },
   { id: 3, friendId: 4, hours: "3", place: "Juniper Coffee", subject: "Design portfolio", when: "Yesterday" },
+  { id: 4, friendId: 3, hours: "2", place: "Moss & Mugs", subject: "Problem set 4", when: "Yesterday" },
+  { id: 5, friendId: 4, hours: "1", place: "The Reading Room", subject: "Flashcards", when: "2 days ago" },
 ];
 
 const headerTaglines = [
@@ -519,10 +520,8 @@ function FriendActivity({
   onLog,
   onBack,
   spotOptions,
-  extra,
 }: {
   spotOptions?: string[]; // [supabase] real spot names for the log form
-  extra?: React.ReactNode; // [supabase] community leaderboard
   activities: Activity[];
   leaderboardHours: Record<number, number>;
   selectedFriend: number | null;
@@ -630,11 +629,37 @@ function FriendActivity({
           </div>
         </section>
 
+        <section className="feed-section">
+          <div className="section-title">
+            <div>
+              <p className="kicker">THE LATEST</p>
+              <h2>{activeFriend ? `${activeFriend.name}'s week` : "Friends are studying"}</h2>
+            </div>
+            {selectedFriend && <button onClick={() => setSelectedFriend(null)}>See all</button>}
+          </div>
+          <div className={`activity-feed${filteredActivities.length > 3 ? " activity-feed--scroll" : ""}`}>
+            {filteredActivities.length ? filteredActivities.map((activity, index) => {
+              const friend = friends.find((item) => item.id === activity.friendId) ?? friends[0];
+              return (
+                <article className="activity-card" key={activity.id}>
+                  <img src={friend.image} alt="" />
+                  <div className="activity-copy">
+                    <div><strong>{friend.name}</strong><span>{activity.when}</span></div>
+                    <p>studied <b>{activity.hours} hours</b> at <em>{activity.place}</em></p>
+                    <small>Working on: {activity.subject}</small>
+                  </div>
+                  <div className={`activity-stamp stamp-${index % 3}`}>{activity.hours}h</div>
+                </article>
+              );
+            }) : <p className="quiet-feed">No sessions yet this week.</p>}
+          </div>
+        </section>
+
         <section className="leaderboard-section">
           <div className="section-title">
             <div>
               <p className="kicker">FRIENDLY COMPETITION</p>
-              <h2>Study leaderboard</h2>
+              <h2>Friends leaderboard</h2>
             </div>
             <span className="week-label">this week</span>
           </div>
@@ -656,33 +681,6 @@ function FriendActivity({
             ))}
           </div>
           <p className="leaderboard-note">Log a session and watch your bar hop forward.</p>
-        </section>
-        {extra}
-
-        <section className="feed-section">
-          <div className="section-title">
-            <div>
-              <p className="kicker">THE LATEST</p>
-              <h2>{activeFriend ? `${activeFriend.name}'s week` : "Friends are studying"}</h2>
-            </div>
-            {selectedFriend && <button onClick={() => setSelectedFriend(null)}>See all</button>}
-          </div>
-          <div className="activity-feed">
-            {filteredActivities.length ? filteredActivities.map((activity, index) => {
-              const friend = friends.find((item) => item.id === activity.friendId) ?? friends[0];
-              return (
-                <article className="activity-card" key={activity.id}>
-                  <img src={friend.image} alt="" />
-                  <div className="activity-copy">
-                    <div><strong>{friend.name}</strong><span>{activity.when}</span></div>
-                    <p>studied <b>{activity.hours} hours</b> at <em>{activity.place}</em></p>
-                    <small>Working on: {activity.subject}</small>
-                  </div>
-                  <div className={`activity-stamp stamp-${index % 3}`}>{activity.hours}h</div>
-                </article>
-              );
-            }) : <p className="quiet-feed">No sessions yet this week.</p>}
-          </div>
         </section>
 
       </div>
@@ -1156,11 +1154,10 @@ export default function App() {
   const [fakeMap, setFakeMap] = useState(!hasGoogleMapsKey);
   const mapDrag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const cardDrag = useRef<number | null>(null);
-  // [supabase] start: guest sign-in, community spots, leaderboard, display-name prompt
+  // [supabase] start: guest sign-in, community spots, display-name prompt
   const auth = useGuestAuth();
   const [placesSpots, setPlacesSpots] = useState<PlaceSpot[]>([]);
   const [communitySpots, setCommunitySpots] = useState<CommunitySpot[]>([]);
-  const [leaderboardRows, setLeaderboardRows] = useState<LeaderboardRow[]>([]);
   const [syncNotice, setSyncNotice] = useState("");
   const [pendingNameAction, setPendingNameAction] = useState<null | (() => void)>(null);
   const refreshCommunity = useCallback(() => {
@@ -1170,7 +1167,6 @@ export default function App() {
         console.warn("[supabase] fetchSpots failed:", error);
         setSyncNotice("Couldn't load community spots — showing local data.");
       });
-    getLeaderboard(10).then(setLeaderboardRows).catch((error) => console.warn("[supabase] leaderboard failed:", error));
   }, []);
   useEffect(() => {
     if (auth.status === "ready") refreshCommunity();
@@ -1691,7 +1687,6 @@ export default function App() {
             onLog={logActivity}
             onBack={() => setPage("places")}
             spotOptions={allSpots.map((spot) => spot.name)} // [supabase]
-            extra={auth.status === "ready" && <CommunityLeaderboard rows={leaderboardRows} youId={auth.user?.id} />}
           />
         )}
 

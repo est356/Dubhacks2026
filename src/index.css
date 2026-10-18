@@ -1181,6 +1181,14 @@ h1 {
   gap: 10px;
 }
 
+/* Cap visible height to ~3 activity cards; scroll for the rest */
+.activity-feed--scroll {
+  max-height: calc(3 * 92px + 2 * 10px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
 .activity-card {
   min-height: 92px;
   position: relative;
