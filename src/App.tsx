@@ -1529,10 +1529,7 @@ export default function App() {
             <StudyMap
               spots={visibleSpots}
               selectedId={selected}
-              onSelect={(id) => {
-                setSelected(id);
-                setDetailsOpen(true);
-              }}
+              onSelect={setSelected}
               onFallback={() => setFakeMap(true)}
               onPlacesLoaded={(results) => {
                 setPlacesSpots(results); // [supabase] merged with community spots in an effect above
@@ -1542,10 +1539,7 @@ export default function App() {
                 <Stamp
                   spot={spot}
                   active={selected === spot.id}
-                  onClick={() => {
-                    setSelected(spot.id);
-                    setDetailsOpen(true);
-                  }}
+                  onClick={() => setSelected(spot.id)}
                 />
               )}
               fallback={<>
@@ -1563,10 +1557,7 @@ export default function App() {
                   key={spot.id}
                   spot={spot}
                   active={selected === spot.id}
-                  onClick={() => {
-                    setSelected(spot.id);
-                    setDetailsOpen(true);
-                  }}
+                  onClick={() => setSelected(spot.id)}
                 />
               ))}
               <div className="you-are-here"><span /> YOU ARE HERE</div>
@@ -1596,11 +1587,7 @@ export default function App() {
               }}
               onPointerUp={(event) => {
                 event.stopPropagation();
-                if (cardDrag.current === null) return;
-                const lift = cardDrag.current - event.clientY;
-                const onButton = (event.target as HTMLElement).closest("button");
-                // Tap the card or pull it up to open the enlarged store sheet.
-                if (!onButton && (lift > 35 || Math.abs(lift) < 8)) setDetailsOpen(true);
+                if (cardDrag.current !== null && cardDrag.current - event.clientY > 35) setDetailsOpen(true);
                 cardDrag.current = null;
               }}
             >
