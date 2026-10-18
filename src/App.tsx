@@ -405,6 +405,8 @@ const starterActivities: Activity[] = [
   { id: 1, friendId: 2, hours: "2.5", place: "Moss & Mugs", subject: "Biology notes", when: "18 min ago" },
   { id: 2, friendId: 3, hours: "1.5", place: "The Reading Room", subject: "Drafting an essay", when: "2 hrs ago" },
   { id: 3, friendId: 4, hours: "3", place: "Juniper Coffee", subject: "Design portfolio", when: "Yesterday" },
+  { id: 4, friendId: 3, hours: "2", place: "Moss & Mugs", subject: "Problem set 4", when: "Yesterday" },
+  { id: 5, friendId: 4, hours: "1", place: "The Reading Room", subject: "Flashcards", when: "2 days ago" },
 ];
 
 const headerTaglines = [
@@ -508,15 +510,11 @@ function Icon({
 function Stamp({
   spot,
   active,
-  stamped,
   onClick,
-  onSave,
 }: {
   spot: Spot;
   active: boolean;
-  stamped: boolean;
   onClick: () => void;
-  onSave: () => void;
 }) {
   return (
     <div
@@ -542,18 +540,6 @@ function Stamp({
         <Icon name={spot.type} size={12} />
       </span>
       <span className="stamp-name">{spot.name}</span>
-      {!stamped && (
-        <button
-          className="marker-save-button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onSave();
-          }}
-          aria-label={`Save ${spot.name}`}
-        >
-          SAVE!
-        </button>
-      )}
     </div>
   );
 }
@@ -858,57 +844,19 @@ function FriendActivity({
           </div>
         </section>
 
-        <section className="leaderboard-section">
-          <div className="section-title">
-            <div>
-              <p className="kicker">FRIENDLY COMPETITION</p>
-              <h2>Study leaderboard</h2>
-            </div>
-            <span className="week-label">{liveStats ? "all time" : "this week"}</span>
-          </div>
-          {circle.length ? (
-            <div className="leaderboard-list">
-              {circle.map((person, index) => (
-                <button
-                  key={person.key}
-                  className={`leaderboard-row ${person.isYou ? "is-you" : ""}`}
-                  onClick={() => setSelectedFriend(person.key)}
-                  aria-label={`View ${person.name}'s activity`}
-                >
-                  <span className="leaderboard-rank">{index + 1}</span>
-                  {person.image ? (
-                    <img src={person.image} alt="" />
-                  ) : (
-                    <span className="community-avatar" style={{ background: person.color }} aria-hidden="true">
-                      {person.name.slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
-                  <span className="leaderboard-progress">
-                    <span><b>{person.name}</b><strong>{person.hoursLabel}</strong></span>
-                    <i><em style={{ width: `${Math.max(9, (person.total / leadingHours) * 100)}%` }} /></i>
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="leaderboard-note">No sessions logged yet. Be the first to hop on!</p>
-          )}
-          <p className="leaderboard-note">Log a session and watch your bar hop forward.</p>
-        </section>
-
         <section className="feed-section">
           <div className="section-title">
             <div>
               <p className="kicker">THE LATEST</p>
               <h2>
                 {liveStats
-                  ? (selectedName ? `${selectedName}'s sessions` : "Latest study sessions")
+                  ? (selectedName ? `${selectedName}'s sessions` : "Friends are studying")
                   : (activeFriend ? `${activeFriend.name}'s week` : "Friends are studying")}
               </h2>
             </div>
             {selectedFriend && <button onClick={() => setSelectedFriend(null)}>See all</button>}
           </div>
-          <div className="activity-feed">
+          <div className={`activity-feed${(liveStats ? visibleSessions.length : filteredActivities.length) > 3 ? " activity-feed--scroll" : ""}`}>
             {liveStats ? (
               visibleSessions.length ? (
                 visibleSessions.map((session, index) => {
@@ -946,6 +894,44 @@ function FriendActivity({
               );
             }) : <p className="quiet-feed">No sessions yet this week.</p>}
           </div>
+        </section>
+
+        <section className="leaderboard-section">
+          <div className="section-title">
+            <div>
+              <p className="kicker">FRIENDLY COMPETITION</p>
+              <h2>Friends leaderboard</h2>
+            </div>
+            <span className="week-label">{liveStats ? "all time" : "this week"}</span>
+          </div>
+          {circle.length ? (
+            <div className="leaderboard-list">
+              {circle.map((person, index) => (
+                <button
+                  key={person.key}
+                  className={`leaderboard-row ${person.isYou ? "is-you" : ""}`}
+                  onClick={() => setSelectedFriend(person.key)}
+                  aria-label={`View ${person.name}'s activity`}
+                >
+                  <span className="leaderboard-rank">{index + 1}</span>
+                  {person.image ? (
+                    <img src={person.image} alt="" />
+                  ) : (
+                    <span className="community-avatar" style={{ background: person.color }} aria-hidden="true">
+                      {person.name.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="leaderboard-progress">
+                    <span><b>{person.name}</b><strong>{person.hoursLabel}</strong></span>
+                    <i><em style={{ width: `${Math.max(9, (person.total / leadingHours) * 100)}%` }} /></i>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="leaderboard-note">No sessions logged yet. Be the first to hop on!</p>
+          )}
+          <p className="leaderboard-note">Log a session and watch your bar hop forward.</p>
         </section>
 
       </div>
@@ -1427,7 +1413,7 @@ export default function App() {
   const [fakeMap, setFakeMap] = useState(!hasGoogleMapsKey);
   const mapDrag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const cardDrag = useRef<number | null>(null);
-  // [supabase] start: guest sign-in, community spots, leaderboard, display-name prompt
+  // [supabase] start: guest sign-in, community spots, display-name prompt
   const auth = useGuestAuth();
   const [placesSpots, setPlacesSpots] = useState<PlaceSpot[]>([]);
   const [communitySpots, setCommunitySpots] = useState<CommunitySpot[]>([]);
@@ -1877,25 +1863,7 @@ export default function App() {
                 <Stamp
                   spot={spot}
                   active={selected === spot.id}
-                  stamped={stampedSpots.includes(spot.id)}
                   onClick={() => setSelected(spot.id)}
-                  onSave={() => {
-                    const place = placeDirectory.find((item) => item.name === spot.name) ?? {
-                      name: spot.name,
-                      address: spot.address,
-                      area: spot.area,
-                      type: spot.type,
-                      position: spot.position,
-                      hours: spot.hours,
-                      openEarly: spot.openEarly,
-                      openLate: spot.openLate,
-                    };
-                    setSelected(spot.id);
-                    setSelectedPlace(place);
-                    setPlaceQuery(place.name);
-                    setSheetMode("stamp");
-                    setAddOpen(true);
-                  }}
                 />
               )}
               fallback={<>
@@ -1913,25 +1881,7 @@ export default function App() {
                   key={spot.id}
                   spot={spot}
                   active={selected === spot.id}
-                  stamped={stampedSpots.includes(spot.id)}
                   onClick={() => setSelected(spot.id)}
-                  onSave={() => {
-                    const place = placeDirectory.find((item) => item.name === spot.name) ?? {
-                      name: spot.name,
-                      address: spot.address,
-                      area: spot.area,
-                      type: spot.type,
-                      position: spot.position,
-                      hours: spot.hours,
-                      openEarly: spot.openEarly,
-                      openLate: spot.openLate,
-                    };
-                    setSelected(spot.id);
-                    setSelectedPlace(place);
-                    setPlaceQuery(place.name);
-                    setSheetMode("stamp");
-                    setAddOpen(true);
-                  }}
                 />
               ))}
               <div className="you-are-here"><span /> YOU ARE HERE</div>
