@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from "react";
+// [google-maps] real map + Places search live in their own files (not Figma-generated)
+import StudyMap, { hasGoogleMapsKey } from "./components/StudyMap";
 
 type Spot = {
   id: number;
@@ -1116,6 +1118,8 @@ export default function App() {
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [placeError, setPlaceError] = useState(false);
   const [mapView, setMapView] = useState({ x: 0, y: 0, scale: 1 });
+  // [google-maps] true when we show the original hand-drawn map (no key / Maps failed to load)
+  const [fakeMap, setFakeMap] = useState(!hasGoogleMapsKey);
   const mapDrag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const cardDrag = useRef<number | null>(null);
   const touchStart = useRef<number | null>(null);
@@ -1390,17 +1394,61 @@ export default function App() {
         {view === "map" ? (
           <section
             className={`map-view ${mapDrag.current ? "is-dragging" : ""}`}
-            onPointerDown={startMapDrag}
-            onPointerMove={moveMap}
-            onPointerUp={() => { mapDrag.current = null; }}
-            onPointerCancel={() => { mapDrag.current = null; }}
+            // [google-maps] drag/zoom handlers only drive the hand-drawn fallback map
+            {...(fakeMap && {
+              onPointerDown: startMapDrag,
+              onPointerMove: moveMap,
+              onPointerUp: () => { mapDrag.current = null; },
+              onPointerCancel: () => { mapDrag.current = null; },
+              onWheel: (event: React.WheelEvent<HTMLElement>) => {
+                event.preventDefault();
+                changeZoom(event.deltaY > 0 ? -.12 : .12);
+              },
+            })}
             onTouchStart={(event) => event.stopPropagation()}
             onTouchEnd={(event) => event.stopPropagation()}
-            onWheel={(event) => {
-              event.preventDefault();
-              changeZoom(event.deltaY > 0 ? -.12 : .12);
-            }}
           >
+            {/* [google-maps] start: real Google Map; original hand-drawn map is the fallback */}
+            <StudyMap
+              spots={visibleSpots}
+              selectedId={selected}
+              onSelect={setSelected}
+              onFallback={() => setFakeMap(true)}
+              onPlacesLoaded={(results) => {
+                const resultIds = new Set(results.map((place) => place.id));
+                setAllSpots((current) => [
+                  ...results,
+                  // drop the hardcoded samples, keep spots the user added themselves
+                  ...current.filter((spot) => !resultIds.has(spot.id) && !spots.some((sample) => sample.id === spot.id)),
+                ]);
+                setSelected(results[0].id);
+              }}
+              renderPin={(spot) => (
+                <Stamp
+                  spot={spot}
+                  active={selected === spot.id}
+                  stamped={stampedSpots.includes(spot.id)}
+                  onClick={() => setSelected(spot.id)}
+                  onSave={() => {
+                    const place = placeDirectory.find((item) => item.name === spot.name) ?? {
+                      name: spot.name,
+                      address: spot.address,
+                      area: spot.area,
+                      type: spot.type,
+                      position: spot.position,
+                      hours: spot.hours,
+                      openEarly: spot.openEarly,
+                      openLate: spot.openLate,
+                    };
+                    setSelected(spot.id);
+                    setSelectedPlace(place);
+                    setPlaceQuery(place.name);
+                    setSheetMode("stamp");
+                    setAddOpen(true);
+                  }}
+                />
+              )}
+              fallback={<>
             <div
               className="map-canvas"
               style={{ transform: `translate(${mapView.x}px, ${mapView.y}px) scale(${mapView.scale})` }}
@@ -1450,6 +1498,9 @@ export default function App() {
                 ◎
               </button>
             </div>
+              </>}
+            />
+            {/* [google-maps] end */}
             <div className="map-gesture-hint">drag to wander · scroll to zoom</div>
             <div
               className="map-card"
